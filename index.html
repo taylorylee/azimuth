@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Azimuth Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --text-primary: #1a1a18;
+      --text-secondary: #5f5e5a;
+      --text-hint: #8f8e8a;
+      --border-light: rgba(26,26,24,0.12);
+      --border-mid: rgba(26,26,24,0.22);
+      --bg-page: #f8f7f4;
+      --bg-surface: #ffffff;
+      --bg-muted: #f1efe8;
+      --accent: #1a1a18;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --text-primary: #e8e6df;
+        --text-secondary: #a0a09a;
+        --text-hint: #6e6e68;
+        --border-light: rgba(232,230,223,0.12);
+        --border-mid: rgba(232,230,223,0.22);
+        --bg-page: #1a1a18;
+        --bg-surface: #232320;
+        --bg-muted: #2c2c2a;
+        --accent: #e8e6df;
+      }
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'EB Garamond', Georgia, serif;
+      background: var(--bg-page);
+      color: var(--text-primary);
+      min-height: 100vh;
+      font-size: 17px;
+      line-height: 1.75;
+    }
+
+    /* Layout */
+    .site-wrap { max-width: 900px; margin: 0 auto; padding: 0 1.5rem; }
+
+    /* Header */
+    header {
+      border-bottom: 0.5px solid var(--border-light);
+      padding: 1.75rem 0;
+      margin-bottom: 0;
+    }
+    .header-inner {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .site-name {
+      font-family: 'DM Mono', monospace;
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-primary);
+    }
+    .site-desc {
+      font-size: 14px;
+      font-style: italic;
+      color: var(--text-secondary);
+    }
+
+    /* Nav */
+    nav {
+      border-bottom: 0.5px solid var(--border-light);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0;
+      background: var(--bg-surface);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-tab {
+      padding: 11px 20px;
+      font-size: 12.5px;
+      font-family: 'DM Mono', monospace;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border: none;
+      background: none;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .nav-tab:hover { color: var(--text-primary); }
+    .nav-tab.active {
+      color: var(--text-primary);
+      border-bottom-color: var(--text-primary);
+    }
+    .apple-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-family: 'DM Mono', monospace;
+      letter-spacing: 0.05em;
+      background: var(--bg-muted);
+      border: 0.5px solid var(--border-mid);
+      padding: 2px 6px;
+      color: var(--text-secondary);
+      vertical-align: middle;
+      margin-left: 5px;
+    }
+
+    /* Pages */
+    .page { display: none; padding: 3rem 0 5rem; }
+    .page.active { display: block; }
+
+    /* Doc header */
+    .doc-header { margin-bottom: 2.75rem; }
+    .doc-title {
+      font-size: 32px;
+      font-weight: 400;
+      line-height: 1.15;
+      color: var(--text-primary);
+      margin-bottom: 0.75rem;
+    }
+    .doc-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--text-secondary);
+      letter-spacing: 0.04em;
+    }
+
+    /* TOC */
+    .toc {
+      border: 0.5px solid var(--border-light);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 3rem;
+      background: var(--bg-surface);
+    }
+    .toc-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10.5px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-hint);
+      margin-bottom: 0.75rem;
+    }
+    .toc ol { padding-left: 1.4rem; }
+    .toc li {
+      font-size: 15px;
+      color: var(--text-secondary);
+      padding: 2.5px 0;
+    }
+    .toc a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.12s;
+    }
+    .toc a:hover { color: var(--text-primary); }
+
+    /* Sections */
+    .section {
+      margin-bottom: 3rem;
+      padding-bottom: 3rem;
+      border-bottom: 0.5px solid var(--border-light);
+    }
+    .section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .section-num {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: var(--text-hint);
+      margin-bottom: 0.35rem;
+    }
+    .section-title {
+      font-size: 21px;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: 1.1rem;
+      line-height: 1.25;
+    }
+    p {
+      font-size: 17px;
+      line-height: 1.75;
+      color: var(--text-primary);
+      margin-bottom: 1rem;
+    }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li {
+      font-size: 17px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      margin-bottom: 0.3rem;
+    }
+    strong { font-weight: 500; }
+
+    /* Callout */
+    .callout {
+      border-left: 2px solid var(--border-mid);
+      padding: 1rem 1.25rem;
+      margin: 1.5rem 0;
+      background: var(--bg-muted);
+      font-size: 16px;
+      line-height: 1.7;
+      color: var(--text-primary);
+    }
+
+    /* Contact grid */
+    .contact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+    .contact-item {
+      background: var(--bg-muted);
+      padding: 1rem 1.25rem;
+    }
+    .contact-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-hint);
+      margin-bottom: 0.4rem;
+    }
+    .contact-value {
+      font-size: 15px;
+      color: var(--text-primary);
+    }
+
+    /* Checklist */
+    .checklist { list-style: none; padding-left: 0; }
+    .checklist li {
+      padding: 0.5rem 0 0.5rem 1.75rem;
+      position: relative;
+      border-bottom: 0.5px solid var(--border-light);
+    }
+    .checklist li:last-child { border-bottom: none; }
+    .checklist li::before {
+      content: '—';
+      position: absolute;
+      left: 0;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--text-hint);
+      top: 0.6rem;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 0.5px solid var(--border-light);
+      padding: 2rem 0;
+      margin-top: 2rem;
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .footer-copy {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--text-hint);
+      letter-spacing: 0.05em;
+    }
+    .footer-links {
+      display: flex;
+      gap: 1.5rem;
+    }
+    .footer-links a {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      letter-spacing: 0.04em;
+    }
+    .footer-links a:hover { color: var(--text-primary); }
+
+    @media (max-width: 600px) {
+      .doc-title { font-size: 26px; }
+      .nav-tab { padding: 10px 14px; font-size: 11.5px; }
+      body { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="site-wrap">
+  <header>
+    <div class="header-inner">
+      <span class="site-name">Azimuth Studio</span>
+      <span class="site-desc">Legal &amp; Policies</span>
+    </div>
+  </header>
+</div>
+
+<nav>
+  <div class="site-wrap" style="display:flex; flex-wrap:wrap;">
+    <button class="nav-tab active" onclick="showPage('terms', this)">Terms &amp; Conditions</button>
+    <button class="nav-tab" onclick="showPage('privacy', this)">Privacy Policy</button>
+    <button class="nav-tab" onclick="showPage('eula', this)">EULA <span class="apple-badge">Apple</span></button>
+    <button class="nav-tab" onclick="showPage('cookies', this)">Cookie Policy</button>
+    <button class="nav-tab" onclick="showPage('apple', this)">App Store Compliance</button>
+  </div>
+</nav>
+
+<div class="site-wrap">
+
+  <!-- TERMS & CONDITIONS -->
+  <div id="page-terms" class="page active">
+    <div class="doc-header">
+      <div class="doc-title">Terms &amp; Conditions</div>
+      <div class="doc-meta">
+        <span>Effective: 15 March 2026</span>
+        <span>Last updated: 15 March 2026</span>
+        <span>Applies worldwide</span>
+      </div>
+    </div>
+    <div class="toc">
+      <div class="toc-label">Contents</div>
+      <ol>
+        <li><a href="#t1">Acceptance of Terms</a></li>
+        <li><a href="#t2">Description of Services</a></li>
+        <li><a href="#t3">User Accounts</a></li>
+        <li><a href="#t4">Intellectual Property</a></li>
+        <li><a href="#t5">Prohibited Conduct</a></li>
+        <li><a href="#t6">Third-Party Services</a></li>
+        <li><a href="#t7">Disclaimers &amp; Limitation of Liability</a></li>
+        <li><a href="#t8">Governing Law</a></li>
+        <li><a href="#t9">Changes to Terms</a></li>
+        <li><a href="#t10">Contact</a></li>
+      </ol>
+    </div>
+
+    <div class="section" id="t1">
+      <div class="section-num">01</div>
+      <div class="section-title">Acceptance of Terms</div>
+      <p>By accessing or using any product, application, or service created and operated by Azimuth Studio ("Studio," "we," "us," or "our"), you agree to be bound by these Terms and Conditions. If you do not agree to these terms, please do not use our services.</p>
+      <p>These terms apply to all visitors, users, and others who access or use the Studio's applications, websites, and services worldwide, including any apps distributed through the Apple App Store or other distribution platforms.</p>
+    </div>
+
+    <div class="section" id="t2">
+      <div class="section-num">02</div>
+      <div class="section-title">Description of Services</div>
+      <p>Azimuth Studio develops design research tools, civic technology applications, and community mapping platforms. Our services may include mobile applications, web applications, research tools, and related content.</p>
+      <p>We reserve the right to modify, suspend, or discontinue any service at any time without notice. We will not be liable to you or any third party for any modification, suspension, or discontinuation of services.</p>
+    </div>
+
+    <div class="section" id="t3">
+      <div class="section-num">03</div>
+      <div class="section-title">User Accounts</div>
+      <p>Some services require you to create an account. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to notify us immediately of any unauthorized use of your account.</p>
+      <p>You must be at least 13 years of age (or the minimum digital age of consent in your country, whichever is higher) to create an account. Users under 18 require parental or guardian consent where required by applicable local law.</p>
+    </div>
+
+    <div class="section" id="t4">
+      <div class="section-num">04</div>
+      <div class="section-title">Intellectual Property</div>
+      <p>All content, features, and functionality of our services — including but not limited to text, graphics, logos, maps, data visualizations, software, and design elements — are the exclusive property of Azimuth Studio and are protected by applicable intellectual property laws worldwide.</p>
+      <p>You may not reproduce, distribute, modify, create derivative works of, publicly display, publicly perform, republish, download, store, or transmit any materials from our services without prior written permission.</p>
+    </div>
+
+    <div class="section" id="t5">
+      <div class="section-num">05</div>
+      <div class="section-title">Prohibited Conduct</div>
+      <p>You agree not to:</p>
+      <ul>
+        <li>Use our services for any unlawful purpose or in violation of any applicable regulations</li>
+        <li>Attempt to gain unauthorized access to any part of our services or systems</li>
+        <li>Scrape, harvest, or collect user data without consent</li>
+        <li>Transmit any unsolicited communications, spam, or malicious code</li>
+        <li>Interfere with or disrupt the integrity or performance of our services</li>
+        <li>Impersonate any person or entity or misrepresent your affiliation</li>
+        <li>Use our services to develop competing products without written consent</li>
+      </ul>
+    </div>
+
+    <div class="section" id="t6">
+      <div class="section-num">06</div>
+      <div class="section-title">Third-Party Services</div>
+      <p>Our services may contain links to or integrate with third-party websites, applications, or services. These third-party services are governed by their own terms and privacy policies. We do not control these services and are not responsible for their content or practices.</p>
+      <p>Our applications distributed through the Apple App Store are subject to Apple's terms and conditions. In the event of any conflict between these Terms and Apple's terms, Apple's terms shall govern with respect to the App Store relationship.</p>
+    </div>
+
+    <div class="section" id="t7">
+      <div class="section-num">07</div>
+      <div class="section-title">Disclaimers &amp; Limitation of Liability</div>
+      <div class="callout">Our services are provided on an "as is" and "as available" basis without warranties of any kind, express or implied, including but not limited to implied warranties of merchantability, fitness for a particular purpose, or non-infringement.</div>
+      <p>To the fullest extent permitted by applicable law, Azimuth Studio shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits or revenues, whether incurred directly or indirectly, arising from your use of our services.</p>
+      <p>Certain jurisdictions do not allow the exclusion of implied warranties or limitation of liability for incidental or consequential damages, so the above limitations may not apply to you in full. In such cases, our liability is limited to the greatest extent permitted by applicable local law.</p>
+    </div>
+
+    <div class="section" id="t8">
+      <div class="section-num">08</div>
+      <div class="section-title">Governing Law</div>
+      <p>These Terms are governed by and construed in accordance with applicable law. Where local mandatory consumer protection laws apply in your jurisdiction, those laws take precedence over these Terms to the extent required.</p>
+      <p>For users in the European Union: nothing in these Terms limits your rights under EU consumer protection legislation. For users in the United Kingdom: the Consumer Rights Act 2015 and related regulations apply. For users in Australia: the Australian Consumer Law applies. For users in New Zealand: the Consumer Guarantees Act 1993 and Fair Trading Act 1986 apply.</p>
+      <p>Any disputes arising from these Terms that are not resolved informally will be subject to the jurisdiction of the courts of the country in which you reside, where required by applicable law.</p>
+    </div>
+
+    <div class="section" id="t9">
+      <div class="section-num">09</div>
+      <div class="section-title">Changes to Terms</div>
+      <p>We reserve the right to revise these Terms at any time. We will notify users of material changes via in-app notification or email at least 30 days before changes take effect where required by applicable law. Your continued use of our services following notice of changes constitutes your acceptance of the updated Terms.</p>
+    </div>
+
+    <div class="section" id="t10">
+      <div class="section-num">10</div>
+      <div class="section-title">Contact</div>
+      <div class="contact-grid">
+        <div class="contact-item">
+          <div class="contact-label">Studio</div>
+          <div class="contact-value">Azimuth Studio</div>
+        </div>
+        <div class="contact-item">
+          <div class="contact-label">Email</div>
+          <div class="contact-value">contact@azimuth.quest</div>
+        </div>
+        <div class="contact-item">
+          <div class="contact-label">Location</div>
+          <div class="contact-value">San Francisco, CA, USA</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRIVACY POLICY -->
+  <div id="page-privacy" class="page">
+    <div class="doc-header">
+      <div class="doc-title">Privacy Policy</div>
+      <div class="doc-meta">
+        <span>Effective: 15 March 2026</span>
+        <span>GDPR · CCPA · PIPEDA · Privacy Act (NZ/AU) compliant</span>
+        <span>Applies worldwide</span>
+      </div>
+    </div>
+    <div class="toc">
+      <div class="toc-label">Contents</div>
+      <ol>
+        <li><a href="#p1">Information We Collect</a></li>
+        <li><a href="#p2">How We Use Information</a></li>
+        <li><a href="#p3">Data Sharing</a></li>
+        <li><a href="#p4">Data Retention</a></li>
+        <li><a href="#p5">Your Rights</a></li>
+        <li><a href="#p6">Children's Privacy</a></li>
+        <li><a href="#p7">Security</a></li>
+        <li><a href="#p8">International Transfers</a></li>
+        <li><a href="#p9">Regional Addenda</a></li>
+        <li><a href="#p10">Contact &amp; DPO</a></li>
+      </ol>
+    </div>
+
+    <div class="section" id="p1">
+      <div class="section-num">01</div>
+      <div class="section-title">Information We Collect</div>
+      <p><strong>Information you provide directly:</strong> account registration details (name, email), user-generated content (map annotations, tagged locations), support correspondence, and any information submitted through forms.</p>
+      <p><strong>Information collected automatically:</strong> device identifiers, IP address, operating system and device type, app usage analytics (screens viewed, features used), crash reports, and approximate location data where permission is granted.</p>
+      <p><strong>Location data:</strong> Our mapping and civic technology applications may request access to your device's precise or approximate location. This data is used solely to provide location-based features. You may revoke location permissions at any time through your device settings.</p>
+      <p>We do not collect biometric data, financial information, health and fitness data, or sensitive personal data as defined under GDPR Article 9.</p>
+    </div>
+
+    <div class="section" id="p2">
+      <div class="section-num">02</div>
+      <div class="section-title">How We Use Information</div>
+      <p>We process your data for the following purposes and legal bases:</p>
+      <ul>
+        <li><strong>Contract performance</strong> — to provide, maintain, and improve our services</li>
+        <li><strong>Legitimate interests</strong> — to analyze usage patterns and improve product design; to detect and prevent fraudulent or unauthorized activity</li>
+        <li><strong>Consent</strong> — to personalize your experience and communicate about non-essential updates (you may withdraw consent at any time)</li>
+        <li><strong>Legal obligation</strong> — to comply with applicable laws and regulations</li>
+      </ul>
+      <p>We do not sell your personal data to third parties. We do not use your data to serve third-party advertising.</p>
+    </div>
+
+    <div class="section" id="p3">
+      <div class="section-num">03</div>
+      <div class="section-title">Data Sharing</div>
+      <p>We may share your information only in the following circumstances:</p>
+      <ul>
+        <li><strong>Service providers:</strong> trusted vendors who assist in operating our services (cloud hosting, analytics), bound by data processing agreements and confidentiality obligations</li>
+        <li><strong>Legal requirements:</strong> when required by law, court order, or to protect the rights and safety of our users</li>
+        <li><strong>Business transfers:</strong> in connection with a merger, acquisition, or sale of assets, with advance notice to users and the opportunity to delete accounts</li>
+        <li><strong>With your consent:</strong> for any other purpose with your explicit prior consent</li>
+      </ul>
+    </div>
+
+    <div class="section" id="p4">
+      <div class="section-num">04</div>
+      <div class="section-title">Data Retention</div>
+      <p>We retain personal data only for as long as necessary to provide our services or as required by law. Account data is deleted within 30 days of account deletion. Anonymized usage analytics may be retained indefinitely. Where local law prescribes specific retention periods, those apply.</p>
+    </div>
+
+    <div class="section" id="p5">
+      <div class="section-num">05</div>
+      <div class="section-title">Your Rights</div>
+      <p>Depending on your jurisdiction, you may have the right to:</p>
+      <ul>
+        <li>Access the personal data we hold about you</li>
+        <li>Request correction of inaccurate data</li>
+        <li>Request deletion of your data</li>
+        <li>Object to or restrict certain processing</li>
+        <li>Data portability (receive your data in a structured, machine-readable format)</li>
+        <li>Withdraw consent at any time (where processing is based on consent)</li>
+        <li>Opt out of the sale of personal data (California residents — CCPA)</li>
+        <li>Lodge a complaint with your local data protection authority</li>
+      </ul>
+      <p>To exercise any of these rights, contact us at contact@azimuth.quest. We will respond within 30 days (or within the timeframe required by your local law).</p>
+    </div>
+
+    <div class="section" id="p6">
+      <div class="section-num">06</div>
+      <div class="section-title">Children's Privacy</div>
+      <div class="callout">Our services are not directed to children under 13 years of age (or the applicable minimum age in your country). We do not knowingly collect personal information from children below this threshold. If we become aware that we have collected such information, we will delete it promptly. Parents or guardians who believe their child has provided us with personal information may contact us at privacy@azimuthstudio.co.</div>
+    </div>
+
+    <div class="section" id="p7">
+      <div class="section-num">07</div>
+      <div class="section-title">Security</div>
+      <p>We implement industry-standard technical and organizational measures to protect your personal data against unauthorized access, alteration, disclosure, or destruction. These include encryption in transit (TLS) and at rest, access controls, and regular security reviews. In the event of a data breach affecting your rights and freedoms, we will notify you and relevant authorities as required by applicable law.</p>
+    </div>
+
+    <div class="section" id="p8">
+      <div class="section-num">08</div>
+      <div class="section-title">International Transfers</div>
+      <p>Your data may be processed in the United States or other countries. Where data is transferred from the European Economic Area, United Kingdom, or Switzerland, we ensure appropriate safeguards are in place, including Standard Contractual Clauses as approved by the European Commission, or other transfer mechanisms recognized under applicable law.</p>
+    </div>
+
+    <div class="section" id="p9">
+      <div class="section-num">09</div>
+      <div class="section-title">Regional Addenda</div>
+      <p><strong>European Union &amp; EEA (GDPR):</strong> Our legal bases for processing are set out in Section 2. Our data controller is Azimuth Studio. You may lodge a complaint with your national supervisory authority.</p>
+      <p><strong>United Kingdom:</strong> Processing is governed by the UK GDPR and the Data Protection Act 2018. You may lodge a complaint with the Information Commissioner's Office (ico.org.uk).</p>
+      <p><strong>Canada (PIPEDA):</strong> You may request access to or correction of your personal information at any time. Complaints may be directed to the Office of the Privacy Commissioner of Canada.</p>
+      <p><strong>Australia:</strong> This policy is consistent with the Australian Privacy Principles under the Privacy Act 1988. Complaints may be directed to the Office of the Australian Information Commissioner (oaic.gov.au).</p>
+      <p><strong>New Zealand:</strong> This policy is consistent with the Privacy Act 2020. Complaints may be directed to the Office of the Privacy Commissioner (privacy.org.nz).</p>
+      <p><strong>California (CCPA/CPRA):</strong> California residents have the right to know, delete, and opt out of the sale of personal information. We do not sell personal information. Submit requests to privacy@azimuthstudio.co or via our in-app settings.</p>
+    </div>
+
+    <div class="section" id="p10">
+      <div class="section-num">10</div>
+      <div class="section-title">Contact &amp; DPO</div>
+      <div class="contact-grid">
+        <div class="contact-item">
+          <div class="contact-label">Privacy inquiries</div>
+          <div class="contact-value">contact@azimuth.quest</div>
+        </div>
+        <div class="contact-item">
+          <div class="contact-label">Response time</div>
+          <div class="contact-value">Within 30 days</div>
+        </div>
+        <div class="contact-item">
+          <div class="contact-label">Postal address</div>
+          <div class="contact-value">San Francisco, CA, USA</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EULA -->
+  <div id="page-eula" class="page">
+    <div class="doc-header">
+      <div class="doc-title">End User License Agreement</div>
+      <div class="doc-meta">
+        <span>Effective: 15 March 2026</span>
+        <span>Apple App Store compliant</span>
+        <span>Based on Apple's standard EULA template</span>
+      </div>
+    </div>
+    <div class="callout">This End User License Agreement ("EULA") is between you and Azimuth Studio, not with Apple Inc. Azimuth Studio, not Apple, is solely responsible for the licensed application and its content. This EULA incorporates Apple's standard EULA terms by reference as required for App Store distribution.</div>
+
+    <div class="section" id="e1">
+      <div class="section-num">01</div>
+      <div class="section-title">Scope of License</div>
+      <p>Azimuth Studio grants you a non-transferable, non-exclusive, worldwide license to use the Application on any Apple-branded product that you own or control, as permitted by the Usage Rules set forth in the Apple Media Services Terms and Conditions.</p>
+      <p>This license does not allow you to use the Application on any Apple device that you do not own or control, and you may not distribute or make the Application available over a network where it could be used by multiple devices at the same time.</p>
+      <p>You may not rent, lease, lend, sell, redistribute, or sublicense the Application.</p>
+    </div>
+
+    <div class="section" id="e2">
+      <div class="section-num">02</div>
+      <div class="section-title">Consent to Use of Data</div>
+      <p>You agree that Azimuth Studio may collect and use technical data and related information — including but not limited to technical information about your device, system, application software, and peripherals — to facilitate the provision of software updates, product support, and other services related to the Application.</p>
+      <p>Azimuth Studio may use this information, as long as it is in a form that does not personally identify you, to improve its products or to provide services or technologies to you. All data use is governed by our Privacy Policy.</p>
+    </div>
+
+    <div class="section" id="e3">
+      <div class="section-num">03</div>
+      <div class="section-title">Maintenance and Support</div>
+      <p>Azimuth Studio is solely responsible for providing any maintenance and support services with respect to the Application, as required under applicable law. Apple has no obligation whatsoever to furnish any maintenance and support services with respect to the Application.</p>
+    </div>
+
+    <div class="section" id="e4">
+      <div class="section-num">04</div>
+      <div class="section-title">Warranty</div>
+      <p>Azimuth Studio is solely responsible for any product warranties, whether express or implied by law, to the extent not effectively disclaimed. In the event of any failure of the Application to conform to any applicable warranty, you may notify Apple, and Apple will refund the purchase price for the Application to you.</p>
+      <p>To the maximum extent permitted by applicable law, Apple will have no other warranty obligation whatsoever with respect to the Application, and any other claims, losses, liabilities, damages, costs, or expenses attributable to any failure to conform to any warranty will be Azimuth Studio's sole responsibility.</p>
+    </div>
+
+    <div class="section" id="e5">
+      <div class="section-num">05</div>
+      <div class="section-title">Product Claims</div>
+      <p>Azimuth Studio, not Apple, is responsible for addressing any claims by you or any third party relating to the Application or your possession and/or use of the Application, including but not limited to: (i) product liability claims; (ii) any claim that the Application fails to conform to any applicable legal or regulatory requirement; and (iii) claims arising under consumer protection, privacy, or similar legislation in any jurisdiction.</p>
+    </div>
+
+    <div class="section" id="e6">
+      <div class="section-num">06</div>
+      <div class="section-title">Intellectual Property Rights</div>
+      <p>In the event of any third-party claim that the Application or your possession and use of the Application infringes that third party's intellectual property rights, Azimuth Studio, not Apple, will be solely responsible for the investigation, defense, settlement, and discharge of any such intellectual property infringement claim.</p>
+    </div>
+
+    <div class="section" id="e7">
+      <div class="section-num">07</div>
+      <div class="section-title">Legal Compliance</div>
+      <p>You represent and warrant that (i) you are not located in a country that is subject to a U.S. Government embargo, or that has been designated by the U.S. Government as a "terrorist supporting" country; and (ii) you are not listed on any U.S. Government list of prohibited or restricted parties.</p>
+    </div>
+
+    <div class="section" id="e8">
+      <div class="section-num">08</div>
+      <div class="section-title">Third Party Terms of Agreement</div>
+      <p>You must comply with applicable third-party terms of agreement when using the Application. If you are accessing the Application via a wireless network, you must comply with your wireless data provider's terms of service.</p>
+    </div>
+
+    <div class="section" id="e9">
+      <div class="section-num">09</div>
+      <div class="section-title">Third Party Beneficiary</div>
+      <p>You and Azimuth Studio acknowledge and agree that Apple, and Apple's subsidiaries, are third-party beneficiaries of this EULA, and that, upon your acceptance of the terms and conditions of this EULA, Apple will have the right (and will be deemed to have accepted the right) to enforce this EULA against you as a third-party beneficiary thereof.</p>
+    </div>
+
+    <div class="section" id="e10">
+      <div class="section-num">10</div>
+      <div class="section-title">Contact</div>
+      <div class="contact-grid">
+        <div class="contact-item">
+          <div class="contact-label">Licensor</div>
+          <div class="contact-value">Azimuth Studio</div>
+        </div>
+        <div class="contact-item">
+          <div class="contact-label">Email</div>
+          <div class="contact-value">contact@azimuth.quest</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COOKIE POLICY -->
+  <div id="page-cookies" class="page">
+    <div class="doc-header">
+      <div class="doc-title">Cookie Policy</div>
+      <div class="doc-meta">
+        <span>Effective: 15 March 2026</span>
+        <span>Applies to web services</span>
+        <span>ePrivacy Directive &amp; GDPR compliant</span>
+      </div>
+    </div>
+
+    <div class="section" id="c1">
+      <div class="section-num">01</div>
+      <div class="section-title">What Are Cookies</div>
+      <p>Cookies are small text files stored on your device by a website. They help websites remember your preferences, maintain sessions, and understand how visitors use the site. Some cookies are essential for basic functionality; others are used for analytics or personalization.</p>
+    </div>
+
+    <div class="section" id="c2">
+      <div class="section-num">02</div>
+      <div class="section-title">Cookies We Use</div>
+      <p><strong>Strictly necessary cookies</strong> — required for the website to function. They enable core features such as page navigation, form submission, and secure login. No consent is required for these cookies under applicable law.</p>
+      <p><strong>Analytics cookies</strong> — help us understand how visitors interact with our site (pages visited, time spent, errors encountered). We use anonymized analytics and do not share this data with third-party advertisers. Consent is requested before placing these cookies for users in applicable jurisdictions (EU, UK).</p>
+      <p><strong>Preference cookies</strong> — remember your settings and choices (theme, language, display preferences) so you do not need to re-enter them each visit. Consent is requested before placing these cookies where required by law.</p>
+      <p>We do not use advertising, tracking, or profiling cookies. We do not permit third-party ad networks to place cookies through our services.</p>
+    </div>
+
+    <div class="section" id="c3">
+      <div class="section-num">03</div>
+      <div class="section-title">Your Consent &amp; Choices</div>
+      <p>For users in the European Union, United Kingdom, and other jurisdictions with cookie consent requirements, we present a consent banner on first visit. You may accept, reject, or configure non-essential cookies at any time via our cookie preferences link in the site footer.</p>
+      <p>You may also configure your browser to block or delete cookies at any time. Note that disabling certain cookies may affect functionality of our web services:</p>
+      <ul>
+        <li>Chrome: Settings → Privacy and security → Cookies</li>
+        <li>Safari: Preferences → Privacy → Manage Website Data</li>
+        <li>Firefox: Options → Privacy &amp; Security → Cookies and Site Data</li>
+        <li>Edge: Settings → Cookies and site permissions</li>
+      </ul>
+    </div>
+
+    <div class="section" id="c4">
+      <div class="section-num">04</div>
+      <div class="section-title">Note on Mobile Applications</div>
+      <p>Our mobile applications (iOS, Android) do not use browser cookies. Mobile apps may use similar technologies such as device identifiers or local storage for session management and preference storage. These are governed by our Privacy Policy and subject to your device's permission settings.</p>
+    </div>
+  </div>
+
+  <!-- APPLE COMPLIANCE -->
+  <div id="page-apple" class="page">
+    <div class="doc-header">
+      <div class="doc-title">App Store Compliance</div>
+      <div class="doc-meta">
+        <span>Reference guide for App Store submission</span>
+        <span>Guidelines 3.1.1 / 5.1 / EULA requirements</span>
+      </div>
+    </div>
+    <div class="callout">This page summarizes Azimuth Studio's compliance posture for App Store review. It is not a user-facing legal document but a reference for Apple reviewers and internal use.</div>
+
+    <div class="section" id="a1">
+      <div class="section-num">01</div>
+      <div class="section-title">Required links for App Store listing</div>
+      <p>Apple requires the following URLs to be specified in App Store Connect:</p>
+      <ul>
+        <li><strong>Privacy Policy URL</strong> — must be publicly accessible, specific to the app, and current. Required for all apps.</li>
+        <li><strong>Terms of Use / EULA URL</strong> — required if your app has in-app purchases or custom license terms. Apple's standard EULA is used by default unless a custom one is provided.</li>
+        <li><strong>Support URL</strong> — a page where users can get help. Required for all apps.</li>
+      </ul>
+    </div>
+
+    <div class="section" id="a2">
+      <div class="section-num">02</div>
+      <div class="section-title">Data use disclosures (App Store Connect)</div>
+      <p>Under Apple's App Privacy nutrition label requirements, you must disclose all data collected:</p>
+      <ul>
+        <li><strong>Location</strong> — Precise or coarse location; purpose: app functionality (mapping). User permission required. Linked to user: No.</li>
+        <li><strong>Identifiers</strong> — Device ID used for crash reporting and analytics. Linked to user: No.</li>
+        <li><strong>Usage data</strong> — Product interaction data for analytics. Linked to user: No.</li>
+        <li><strong>Diagnostics</strong> — Crash data. Linked to user: No.</li>
+        <li><strong>Contact info</strong> — Email address if account is created. Linked to user: Yes.</li>
+      </ul>
+      <p>Data is not used for third-party advertising and is not sold. Indicate "Data Not Linked to You" for all categories except contact info.</p>
+    </div>
+
+    <div class="section" id="a3">
+      <div class="section-num">03</div>
+      <div class="section-title">Age rating &amp; content</div>
+      <p>Apps must be accurately rated. Civic mapping and design research tools with no user-generated social content typically rate 4+ or 9+. If the app includes user-generated content or community features (e.g., shared map annotations), rate 12+ and enable content moderation or reporting mechanisms as required by Guideline 1.2.</p>
+    </div>
+
+    <div class="section" id="a4">
+      <div class="section-num">04</div>
+      <div class="section-title">In-app purchases</div>
+      <p>If Azimuth Studio apps include paid features, subscriptions, or premium content, all transactions must use Apple's in-app purchase system (Guideline 3.1.1). Directing users to external payment systems for digital goods is prohibited. Physical goods and services rendered outside the app are exempt.</p>
+    </div>
+
+    <div class="section" id="a5">
+      <div class="section-num">05</div>
+      <div class="section-title">Key App Store Review guidelines</div>
+      <ul>
+        <li><strong>Guideline 1.1</strong> — No objectionable content</li>
+        <li><strong>Guideline 2.1</strong> — App completeness: no placeholder content or broken links at submission</li>
+        <li><strong>Guideline 3.1.1</strong> — In-app purchase requirements</li>
+        <li><strong>Guideline 4.0</strong> — Design standards: apps must function as described, not just wrap a website</li>
+        <li><strong>Guideline 5.1.1</strong> — Privacy policy required; must cover all data types collected</li>
+        <li><strong>Guideline 5.1.2</strong> — Permission request strings must clearly explain purpose (e.g., "Location is used to show community spaces near you")</li>
+      </ul>
+    </div>
+
+    <div class="section" id="a6">
+      <div class="section-num">06</div>
+      <div class="section-title">Submission checklist</div>
+      <ul class="checklist">
+        <li>Privacy Policy URL added to App Store Connect and live on the web</li>
+        <li>EULA URL added if custom license terms are used</li>
+        <li>Support URL live and responsive</li>
+        <li>App Privacy nutrition labels completed for all data types</li>
+        <li>All permission usage description strings (NSLocationWhenInUseUsageDescription, etc.) populated in Info.plist</li>
+        <li>Age rating questionnaire completed accurately</li>
+        <li>All in-app purchases configured through App Store Connect</li>
+        <li>No references to competing platforms in app text or metadata</li>
+        <li>App tested on latest iOS version and current hardware</li>
+        <li>Screenshot assets and preview video comply with App Store metadata guidelines</li>
+      </ul>
+    </div>
+  </div>
+
+</div><!-- /site-wrap -->
+
+<div class="site-wrap">
+  <footer>
+    <div class="footer-inner">
+      <span class="footer-copy">&copy; 2026 Azimuth Studio. All rights reserved.</span>
+      <div class="footer-links">
+        <a href="#" onclick="showPage('terms', document.querySelectorAll('.nav-tab')[0]); return false;">Terms</a>
+        <a href="#" onclick="showPage('privacy', document.querySelectorAll('.nav-tab')[1]); return false;">Privacy</a>
+        <a href="#" onclick="showPage('eula', document.querySelectorAll('.nav-tab')[2]); return false;">EULA</a>
+        <a href="mailto:contact@azimuth.quest">Contact</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<script>
+  function showPage(id, btn) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('page-' + id).classList.add('active');
+    if (btn && btn.classList) btn.classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+</script>
+
+</body>
+</html>
