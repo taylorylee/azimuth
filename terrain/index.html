@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Terrain</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@300;400&display=swap" rel="stylesheet">
+<!-- geotiff.js for decoding GeoTIFF elevation rasters in the browser -->
+<script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+:root{
+  --ink:#18180f;--parch:#F2EDE3;--parch2:#E8E2D6;--parch3:#D8D1C4;
+  --green:#243C31;--green2:#162819;--green3:#2e4d3e;
+  --rule:rgba(24,24,15,0.1);--rule2:rgba(24,24,15,0.18);
+  --mid:#504e3c;--faint:#8f8a77;
+  --amber:#c8973a;--red:#b84a3a;--blue:#2a5c8a;
+}
+html,body{height:100%;width:100%;background:var(--green2);font-family:'Barlow Condensed',sans-serif;overflow:hidden;}
+.app{display:flex;flex-direction:column;height:100dvh;width:100%;position:relative;}
+
+/* HEADER */
+.header{height:52px;flex-shrink:0;background:var(--green2);display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid rgba(255,255,255,0.08);z-index:10;}
+.brand-name{font-size:16px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:#fff;}
+
+.hdr-right{display:flex;align-items:center;gap:8px;position:relative;}
+
+.mode-pill{display:flex;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;}
+.mode-opt{padding:6px 10px;font-size:9px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.4);cursor:pointer;transition:all 0.15s;}
+.mode-opt.active{background:var(--green3);color:#fff;}
+
+.dl-btn{display:flex;align-items:center;gap:6px;background:var(--parch);color:var(--green2);border:none;cursor:pointer;padding:7px 13px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;transition:opacity 0.15s;}
+.dl-btn:active{opacity:0.8;}
+.dl-menu{position:absolute;top:calc(100% + 6px);right:0;background:var(--parch);border-top:2px solid var(--green);min-width:180px;z-index:300;display:none;box-shadow:0 8px 24px rgba(0,0,0,0.3);}
+.dl-menu.open{display:block;}
+.dl-item{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink);cursor:pointer;border-bottom:1px solid var(--rule);transition:background 0.1s;}
+.dl-item:last-child{border-bottom:none;}
+.dl-item:active{background:var(--parch2);}
+.dl-tag{font-weight:700;color:var(--green);font-size:9px;}
+
+/* CANVAS STAGE */
+.stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:var(--green2);padding:12px;position:relative;}
+.cmount{position:relative;box-shadow:0 4px 40px rgba(0,0,0,0.6);max-width:100%;max-height:100%;}
+canvas#tc{display:block;max-width:100%;max-height:100%;}
+.veil{position:absolute;inset:0;background:rgba(22,40,25,0.82);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;transition:opacity 0.25s;}
+.veil.gone{opacity:0;pointer-events:none;}
+.veil-txt{font-size:10px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:rgba(242,237,227,0.65);}
+.vspin{width:20px;height:20px;border:1.5px solid rgba(242,237,227,0.15);border-top-color:var(--parch);border-radius:50%;animation:sp .65s linear infinite;display:none;}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* status badge on canvas */
+.src-badge{position:absolute;top:8px;left:8px;padding:4px 8px;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;border-radius:2px;pointer-events:none;opacity:0;transition:opacity 0.3s;}
+.src-badge.show{opacity:1;}
+.src-badge.real{background:rgba(42,92,138,0.85);color:#c8e0f8;}
+.src-badge.demo{background:rgba(80,78,60,0.85);color:#d8d4c0;}
+
+.coords-bar{position:absolute;bottom:0;left:0;right:0;padding:7px 12px;background:linear-gradient(transparent,rgba(22,40,25,0.65));font-size:9px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:rgba(242,237,227,0.45);pointer-events:none;}
+
+/* DRAWER */
+.drawer{flex-shrink:0;height:50vh;background:var(--parch);border-top:1.5px solid var(--ink);display:flex;flex-direction:column;overflow:hidden;}
+.drawer-tabs{display:flex;align-items:stretch;border-bottom:1px solid var(--rule2);flex-shrink:0;}
+.dtab{flex:1;display:flex;align-items:center;justify-content:center;padding:11px 4px;font-size:9px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--faint);cursor:pointer;border-right:1px solid var(--rule2);transition:color 0.12s;user-select:none;}
+.dtab:last-child{border-right:none;}
+.dtab.active{color:var(--green2);}
+.panels{flex:1;overflow:hidden;position:relative;}
+.panel{position:absolute;inset:0;overflow-y:auto;padding:14px 16px 24px;display:none;-webkit-overflow-scrolling:touch;}
+.panel::-webkit-scrollbar{display:none;}
+.panel.active{display:block;}
+
+/* API key banner */
+.api-banner{background:rgba(200,151,58,0.12);border:1px solid rgba(200,151,58,0.3);padding:10px 12px;margin-bottom:14px;display:flex;align-items:flex-start;gap:9px;}
+.api-banner-icon{font-size:14px;flex-shrink:0;margin-top:1px;}
+.api-banner-body{flex:1;}
+.api-banner-title{font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--amber);margin-bottom:3px;}
+.api-banner-text{font-family:'Barlow',sans-serif;font-size:11px;font-weight:300;color:var(--mid);line-height:1.5;}
+.api-banner a{color:var(--amber);text-decoration:none;}
+
+/* section */
+.psec{margin-bottom:16px;}
+.psec-label{font-size:8px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:var(--faint);margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+.psec-label::after{content:'';flex:1;height:1px;background:var(--rule2);}
+
+/* field */
+.field{margin-bottom:10px;}
+.field label{display:block;font-size:9px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--faint);margin-bottom:4px;}
+.field input[type=text],.field select,.field input[type=password]{width:100%;background:transparent;border:none;border-bottom:1px solid var(--rule2);color:var(--ink);padding:7px 0;font-family:'Barlow',sans-serif;font-size:13px;font-weight:300;outline:none;border-radius:0;appearance:none;transition:border-color 0.15s;}
+.field input:focus,.field select:focus{border-bottom-color:var(--green);}
+.field select{cursor:pointer;background:var(--parch);}
+.field select option{background:var(--parch);}
+.fpair{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+/* chips */
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;}
+.chip{font-size:9px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);padding:5px 10px;border:1px solid var(--rule2);cursor:pointer;transition:all 0.12s;}
+.chip:active{border-color:var(--green);color:var(--green);}
+
+/* range */
+.rf{margin-bottom:12px;}
+.rf-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+.rf-row span:first-child{font-size:9px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--faint);}
+.rv{font-size:11px;font-weight:700;color:var(--green);font-variant-numeric:tabular-nums;}
+input[type=range]{width:100%;height:2px;background:var(--rule2);appearance:none;outline:none;cursor:pointer;border-radius:0;}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:18px;height:18px;background:var(--green2);border-radius:50%;cursor:pointer;border:2px solid var(--parch);box-shadow:0 0 0 1px var(--green2);}
+
+/* palette */
+.pal-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:4px;}
+.pal{aspect-ratio:1;cursor:pointer;border:3px solid transparent;transition:border-color 0.12s,transform 0.1s;border-radius:2px;}
+.pal:active{transform:scale(0.94);}
+.pal.on{border-color:var(--ink);}
+.pal.txp{background:repeating-conic-gradient(#c8c2b3 0% 25%,#ddd8cc 0% 50%) 0 0/12px 12px;border:1px solid var(--rule2);}
+.pal.txp.on{border:3px solid var(--ink);}
+.pcustom{display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--faint);background:var(--parch2);border:1px dashed var(--rule2) !important;}
+
+/* toggle */
+.trow{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--rule);}
+.trow:last-child{border-bottom:none;}
+.trow span{font-size:11px;font-weight:400;color:var(--mid);}
+.tog{position:relative;width:36px;height:20px;flex-shrink:0;}
+.tog input{opacity:0;width:0;height:0;}
+.tog-t{position:absolute;inset:0;background:var(--parch3);border:1px solid var(--rule2);cursor:pointer;border-radius:10px;transition:background 0.15s;}
+.tog-t::after{content:'';position:absolute;left:3px;top:50%;transform:translateY(-50%);width:12px;height:12px;background:var(--faint);border-radius:50%;transition:transform 0.15s,background 0.15s;}
+.tog input:checked+.tog-t{background:var(--green2);border-color:var(--green2);}
+.tog input:checked+.tog-t::after{transform:translate(16px,-50%);background:#fff;}
+
+/* buttons */
+.gen-btn{width:100%;padding:14px;background:var(--green2);color:var(--parch);border:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.24em;text-transform:uppercase;transition:opacity 0.15s;margin-top:4px;}
+.gen-btn:active{opacity:0.8;}
+.gen-btn.busy{opacity:0.45;pointer-events:none;}
+.rand-btn{width:100%;padding:10px;margin-top:8px;background:transparent;color:var(--mid);border:1px solid var(--rule2);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;transition:all 0.12s;}
+.rand-btn:active{border-color:var(--green);color:var(--green);}
+
+/* export big */
+.exp-big{width:100%;display:flex;align-items:center;justify-content:space-between;padding:13px 14px;background:var(--parch2);border:1px solid var(--rule2);cursor:pointer;font-family:'Barlow Condensed',sans-serif;margin-bottom:7px;transition:background 0.1s;}
+.exp-big:active{background:var(--parch3);}
+.exp-label{font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink);}
+.exp-tag{font-size:9px;font-weight:700;letter-spacing:0.12em;color:var(--green);}
+
+/* info text */
+.info-text{font-family:'Barlow',sans-serif;font-size:12px;font-weight:300;color:var(--mid);line-height:1.65;margin-top:4px;}
+.info-text a{color:var(--green);text-decoration:none;}
+.info-text code{font-size:10px;background:var(--parch2);padding:2px 5px;border-radius:2px;font-family:monospace;}
+
+/* proxy note */
+.proxy-note{background:rgba(42,92,138,0.08);border:1px solid rgba(42,92,138,0.2);padding:10px 12px;margin-top:10px;}
+.proxy-note-title{font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--blue);margin-bottom:4px;}
+.proxy-note code{display:block;font-size:10px;font-family:monospace;color:var(--mid);margin-top:4px;word-break:break-all;line-height:1.5;}
+
+/* desktop */
+@media(min-width:768px){
+  .app{flex-direction:row;flex-wrap:wrap;}
+  .header{width:100%;order:0;}
+  .stage{order:1;flex:1;}
+  .drawer{order:2;width:290px;height:calc(100dvh - 52px);border-top:none;border-left:1.5px solid var(--ink);}
+  .drawer-tabs{display:none;}
+  .panel{display:block;position:static;}
+  .panels{overflow-y:auto;height:100%;}
+  #panel-location,#panel-style,#panel-export{display:block;position:static;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- HEADER -->
+<header class="header">
+  <div class="brand-name">Terrain</div>
+  <div class="hdr-right">
+    <div class="mode-pill">
+      <div class="mode-opt active" id="modeDemo" title="Procedural noise — no API key needed">Demo</div>
+      <div class="mode-opt" id="modeDEM" title="Real elevation from SRTM/3DEP via OpenTopography">Real DEM</div>
+    </div>
+    <div style="position:relative;">
+      <button class="dl-btn" id="dlBtn">
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v6M3 5l2.5 2.5L8 5M1 9.5h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Download
+      </button>
+      <div class="dl-menu" id="dlMenu">
+        <div class="dl-item" data-fmt="png-transparent">PNG — transparent <span class="dl-tag">PNG α</span></div>
+        <div class="dl-item" data-fmt="png-opaque">PNG — solid <span class="dl-tag">PNG</span></div>
+        <div class="dl-item" data-fmt="jpg">JPEG <span class="dl-tag">JPG</span></div>
+        <div class="dl-item" data-fmt="svg">Vector <span class="dl-tag">SVG</span></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- CANVAS -->
+<div class="stage" id="stage">
+  <div class="cmount" id="cmount">
+    <canvas id="tc"></canvas>
+    <div class="veil" id="veil">
+      <div class="vspin" id="vspin"></div>
+      <div class="veil-txt" id="vtxt">Tap Generate</div>
+    </div>
+    <div class="src-badge" id="srcBadge"></div>
+  </div>
+  <div class="coords-bar" id="coords"></div>
+</div>
+
+<!-- DRAWER -->
+<div class="drawer">
+  <div class="drawer-tabs">
+    <div class="dtab active" data-tab="location">Location</div>
+    <div class="dtab" data-tab="style">Style</div>
+    <div class="dtab" data-tab="export">Export</div>
+  </div>
+  <div class="panels">
+
+    <!-- LOCATION -->
+    <div class="panel active" id="panel-location">
+
+      <!-- API key section (shown in Real DEM mode) -->
+      <div id="demSection" style="display:none;">
+        <div class="api-banner">
+          <div class="api-banner-icon">⚡</div>
+          <div class="api-banner-body">
+            <div class="api-banner-title">Real elevation data</div>
+            <div class="api-banner-text">Enter your free <a href="https://portal.opentopography.org/requestService?service=api" target="_blank">OpenTopography API key</a> to fetch real SRTM/3DEP terrain. Without it, uses demo mode.</div>
+          </div>
+        </div>
+        <div class="field">
+          <label>OpenTopography API Key</label>
+          <input type="password" id="apiKey" placeholder="Paste your key here…" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Dataset</label>
+          <select id="demType">
+            <option value="SRTMGL1">SRTM GL1 — Global 30m (recommended)</option>
+            <option value="SRTMGL3">SRTM GL3 — Global 90m (faster)</option>
+            <option value="AW3D30">ALOS World 3D — 30m</option>
+            <option value="NASADEM">NASADEM — 30m</option>
+            <option value="COP30">Copernicus DEM — 30m</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Area span (degrees)</label>
+          <select id="spanDeg">
+            <option value="0.25">0.25° — ~28km (zoomed in)</option>
+            <option value="0.5" selected>0.5° — ~55km (default)</option>
+            <option value="1.0">1.0° — ~110km</option>
+            <option value="2.0">2.0° — ~220km (wide)</option>
+          </select>
+        </div>
+        <div class="proxy-note">
+          <div class="proxy-note-title">CORS — Proxy required</div>
+          <div class="info-text" style="font-size:11px;">OpenTopography blocks direct browser requests. Deploy the included Cloudflare Worker as a one-click proxy, or paste a custom proxy URL below.</div>
+          <div class="field" style="margin-top:8px;margin-bottom:0;">
+            <label>Proxy base URL (optional)</label>
+            <input type="text" id="proxyUrl" placeholder="https://your-worker.workers.dev">
+          </div>
+        </div>
+        <div style="margin-top:10px;margin-bottom:14px;">
+          <div class="info-text" style="font-size:10px;color:var(--faint);">Worker code: <code>fetch('https://portal.opentopography.org'+url.search)</code> — see Export tab for full snippet.</div>
+        </div>
+      </div>
+
+      <div class="psec">
+        <div class="psec-label">Location</div>
+        <div class="field">
+          <label>Place or address</label>
+          <input type="text" id="locS" placeholder="e.g. Yosemite Valley, CA">
+        </div>
+        <div class="fpair">
+          <div class="field"><label>Latitude</label><input type="text" id="latI" value="37.7351" inputmode="decimal"></div>
+          <div class="field"><label>Longitude</label><input type="text" id="lonI" value="-119.5983" inputmode="decimal"></div>
+        </div>
+        <div class="field">
+          <label>Canvas size</label>
+          <select id="szS">
+            <option value="1200x800" selected>Landscape 3:2 — 1200×800</option>
+            <option value="800x600">Landscape 4:3 — 800×600</option>
+            <option value="800x800">Square 1:1 — 800×800</option>
+            <option value="600x900">Portrait — 600×900</option>
+            <option value="1920x1080">Full HD — 1920×1080</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="psec">
+        <div class="psec-label">Quick locations</div>
+        <div class="chips">
+          <div class="chip" data-lat="37.7351" data-lon="-119.5983" data-n="Yosemite">Yosemite</div>
+          <div class="chip" data-lat="36.1069" data-lon="-112.1129" data-n="Grand Canyon">Grand Canyon</div>
+          <div class="chip" data-lat="44.4280" data-lon="-110.5885" data-n="Yellowstone">Yellowstone</div>
+          <div class="chip" data-lat="-45.0312" data-lon="168.6626" data-n="Fiordland NZ">Fiordland</div>
+          <div class="chip" data-lat="27.9881" data-lon="86.9250" data-n="Everest">Everest</div>
+          <div class="chip" data-lat="-36.8485" data-lon="174.7633" data-n="Auckland">Auckland</div>
+          <div class="chip" data-lat="51.5074" data-lon="-0.1278" data-n="London">London</div>
+          <div class="chip" data-lat="35.6895" data-lon="139.6917" data-n="Tokyo">Tokyo</div>
+          <div class="chip" data-lat="-33.8688" data-lon="151.2093" data-n="Sydney">Sydney</div>
+          <div class="chip" data-lat="46.8523" data-lon="-121.7603" data-n="Mt. Rainier">Rainier</div>
+        </div>
+      </div>
+
+      <button class="gen-btn" id="genBtn">Generate Map</button>
+      <button class="rand-btn" id="randBtn">↺ Randomize seed</button>
+    </div>
+
+    <!-- STYLE -->
+    <div class="panel" id="panel-style">
+      <div class="psec">
+        <div class="psec-label">Contours</div>
+        <div class="rf"><div class="rf-row"><span>Density</span><span class="rv" id="rv-l">28</span></div><input type="range" id="r-l" min="6" max="60" value="28"></div>
+        <div class="rf"><div class="rf-row"><span>Line Weight</span><span class="rv" id="rv-w">0.7</span></div><input type="range" id="r-w" min="2" max="20" value="7"></div>
+        <div class="rf"><div class="rf-row"><span>Smoothness</span><span class="rv" id="rv-s">6</span></div><input type="range" id="r-s" min="1" max="12" value="6"></div>
+        <div id="demoControls">
+          <div class="rf"><div class="rf-row"><span>Ruggedness</span><span class="rv" id="rv-r">0.55</span></div><input type="range" id="r-r" min="10" max="90" value="55"></div>
+          <div class="rf"><div class="rf-row"><span>Elevation Variance</span><span class="rv" id="rv-v">0.65</span></div><input type="range" id="r-v" min="10" max="95" value="65"></div>
+          <div class="rf"><div class="rf-row"><span>Seed</span><span class="rv" id="rv-sd">42</span></div><input type="range" id="r-sd" min="1" max="999" value="42"></div>
+        </div>
+      </div>
+      <div class="psec">
+        <div class="psec-label">Palette</div>
+        <div class="pal-grid">
+          <div class="pal txp on" data-bg="transparent" data-line="rgba(36,60,49,0.48)" data-name="Clear" title="Transparent"></div>
+          <div class="pal" style="background:#F2EDE3" data-bg="#F2EDE3" data-line="rgba(36,60,49,0.48)" data-name="Parchment" title="Parchment"></div>
+          <div class="pal" style="background:#162819" data-bg="#162819" data-line="rgba(180,215,195,0.3)" data-name="Forest" title="Forest"></div>
+          <div class="pal" style="background:#18180f" data-bg="#18180f" data-line="rgba(242,237,227,0.22)" data-name="Ink" title="Ink"></div>
+          <div class="pal" style="background:#e8dfc8" data-bg="#e8dfc8" data-line="rgba(60,48,20,0.44)" data-name="Wheat" title="Wheat"></div>
+          <div class="pal" style="background:#0b1a28" data-bg="#0b1a28" data-line="rgba(140,195,240,0.24)" data-name="Tide" title="Tide"></div>
+          <div class="pal" style="background:#2a1a10" data-bg="#2a1a10" data-line="rgba(210,165,110,0.32)" data-name="Clay" title="Clay"></div>
+          <div class="pal" style="background:#e4ddd2" data-bg="#e4ddd2" data-line="rgba(80,55,30,0.38)" data-name="Bone" title="Bone"></div>
+          <div class="pal" style="background:#1c1428" data-bg="#1c1428" data-line="rgba(200,175,240,0.26)" data-name="Dusk" title="Dusk"></div>
+          <div class="pal pcustom" id="palC" title="Custom">+</div>
+        </div>
+        <input type="color" id="cCol" style="display:none;">
+      </div>
+      <div class="psec">
+        <div class="psec-label">Overlays</div>
+        <div class="trow"><span>Index contours (bold ×5)</span><label class="tog"><input type="checkbox" id="t-ix" checked><div class="tog-t"></div></label></div>
+        <div class="trow"><span>Coordinate imprint</span><label class="tog"><input type="checkbox" id="t-co" checked><div class="tog-t"></div></label></div>
+        <div class="trow"><span>Location label</span><label class="tog"><input type="checkbox" id="t-la" checked><div class="tog-t"></div></label></div>
+        <div class="trow"><span>Vignette</span><label class="tog"><input type="checkbox" id="t-vi" checked><div class="tog-t"></div></label></div>
+      </div>
+      <button class="gen-btn" id="genBtn2">Generate Map</button>
+    </div>
+
+    <!-- EXPORT -->
+    <div class="panel" id="panel-export">
+      <div class="psec">
+        <div class="psec-label">Download</div>
+        <button class="exp-big" data-fmt="png-transparent"><span class="exp-label">PNG — Transparent</span><span class="exp-tag">PNG α</span></button>
+        <button class="exp-big" data-fmt="png-opaque"><span class="exp-label">PNG — Solid</span><span class="exp-tag">PNG</span></button>
+        <button class="exp-big" data-fmt="jpg"><span class="exp-label">JPEG</span><span class="exp-tag">JPG</span></button>
+        <button class="exp-big" data-fmt="svg"><span class="exp-label">Vector — infinitely scalable</span><span class="exp-tag">SVG</span></button>
+      </div>
+
+      <div class="psec">
+        <div class="psec-label">Cloudflare Worker — CORS Proxy</div>
+        <p class="info-text">Deploy this Worker to enable Real DEM mode. Free tier handles thousands of requests/day.</p>
+        <div style="background:var(--ink);padding:12px;margin-top:10px;overflow-x:auto;">
+<pre style="font-size:10px;color:#a8d8b0;line-height:1.7;font-family:monospace;white-space:pre-wrap;">// terrain-proxy/index.js
+export default {
+  async fetch(request) {
+    const url = new URL(request.url);
+    const target =
+      'https://portal.opentopography.org'
+      + url.pathname
+      + url.search;
+    const resp = await fetch(target, {
+      headers: { Accept: '*/*' }
+    });
+    const headers = new Headers(resp.headers);
+    headers.set('Access-Control-Allow-Origin', '*');
+    return new Response(resp.body, {
+      status: resp.status,
+      headers
+    });
+  }
+};</pre>
+        </div>
+        <p class="info-text" style="margin-top:8px;">Deploy: <code>wrangler deploy</code> — paste your <code>*.workers.dev</code> URL into Location → Proxy URL.</p>
+      </div>
+
+      <div class="psec">
+        <div class="psec-label">Get an API Key</div>
+        <p class="info-text">Free key at <a href="https://portal.opentopography.org/requestService?service=api" target="_blank">portal.opentopography.org</a>. Rate limit: 50 requests/day (non-academic). Each map generation = 1 request. SRTM GL1 global 30m data, no restrictions on output use.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<script>
+// ── PRNG + NOISE (for demo mode) ──────────────────────────────────────────
+function prng(s){return function(){s|=0;s=s+0x6D2B79F5|0;var t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function mkNoise(rand){
+  const p=new Uint8Array(256);for(let i=0;i<256;i++)p[i]=i;
+  for(let i=255;i>0;i--){const j=Math.floor(rand()*(i+1));[p[i],p[j]]=[p[j],p[i]];}
+  const pm=new Uint8Array(512);for(let i=0;i<512;i++)pm[i]=p[i&255];
+  function fade(t){return t*t*t*(t*(t*6-15)+10);}
+  function grad(h,x,y){switch(h&3){case 0:return x+y;case 1:return-x+y;case 2:return x-y;case 3:return-x-y;}}
+  return function(x,y){
+    const X=Math.floor(x)&255,Y=Math.floor(y)&255;
+    x-=Math.floor(x);y-=Math.floor(y);
+    const u=fade(x),v=fade(y),a=pm[X]+Y,b=pm[X+1]+Y;
+    function lr(a,b,t){return a+t*(b-a);}
+    return((1+lr(lr(grad(pm[a],x,y),grad(pm[b],x-1,y),u),lr(grad(pm[a+1],x,y-1),grad(pm[b+1],x-1,y-1),u),v))/2);
+  };
+}
+function fbm(n,x,y,o,r){let v=0,a=0.5,f=1,m=0;for(let i=0;i<o;i++){v+=n(x*f,y*f)*a;m+=a;a*=r;f*=2.1+Math.sin(i*.7)*.1;}return v/m;}
+
+// ── STATE ────────────────────────────────────────────────────────────────
+let pal={bg:'transparent',line:'rgba(36,60,49,0.48)',name:'Clear'};
+let done=false;
+let currentMode='demo'; // 'demo' | 'dem'
+let lastHmap=null; // store last height map for SVG re-render
+
+// ── PARAMS ───────────────────────────────────────────────────────────────
+function P(){
+  return{
+    lat:parseFloat(document.getElementById('latI').value)||37.7351,
+    lon:parseFloat(document.getElementById('lonI').value)||-119.5983,
+    lines:+document.getElementById('r-l').value,
+    weight:+document.getElementById('r-w').value/10,
+    smooth:+document.getElementById('r-s').value,
+    rug:+document.getElementById('r-r').value/100,
+    variance:+document.getElementById('r-v').value/100,
+    seed:+document.getElementById('r-sd').value,
+    ix:document.getElementById('t-ix').checked,
+    co:document.getElementById('t-co').checked,
+    la:document.getElementById('t-la').checked,
+    vi:document.getElementById('t-vi').checked,
+    size:document.getElementById('szS').value,
+    pal:{...pal},
+    name:document.getElementById('locS').value||pname()||'',
+    apiKey:document.getElementById('apiKey').value.trim(),
+    demType:document.getElementById('demType').value,
+    spanDeg:parseFloat(document.getElementById('spanDeg').value),
+    proxyUrl:document.getElementById('proxyUrl').value.trim()
+  };
+}
+function pname(){
+  const lat=parseFloat(document.getElementById('latI').value);
+  const lon=parseFloat(document.getElementById('lonI').value);
+  for(const c of document.querySelectorAll('.chip'))
+    if(Math.abs(parseFloat(c.dataset.lat)-lat)<.01&&Math.abs(parseFloat(c.dataset.lon)-lon)<.01)return c.dataset.n;
+  return null;
+}
+function isLight(hex){
+  if(!hex||hex==='transparent')return true;
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return(r*299+g*587+b*114)/1000>128;
+}
+function updCoords(){
+  const lat=parseFloat(document.getElementById('latI').value)||0;
+  const lon=parseFloat(document.getElementById('lonI').value)||0;
+  const nm=document.getElementById('locS').value||pname()||'';
+  const ls=lat>=0?lat.toFixed(4)+'°N':Math.abs(lat).toFixed(4)+'°S';
+  const lo=lon>=0?lon.toFixed(4)+'°E':Math.abs(lon).toFixed(4)+'°W';
+  document.getElementById('coords').textContent=ls+' '+lo+(nm?'  —  '+nm.toUpperCase():'');
+}
+
+// ── DEMO HEIGHTMAP (Perlin noise) ─────────────────────────────────────────
+function buildDemoHmap(p, W, H){
+  const res=3,cols=Math.ceil(W/res)+1,rows=Math.ceil(H/res)+1;
+  const hmap=new Float32Array(cols*rows);
+  const rnd=prng(p.seed+Math.abs(Math.round(p.lat*100))+Math.abs(Math.round(p.lon*100)));
+  const noise=mkNoise(rnd);
+  const sX=(4+p.rug*4)/W,sY=(4+p.rug*4)/H;
+  const oX=p.lon*.17+p.seed*.037,oY=p.lat*.13+p.seed*.041;
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const nx=c*res*sX+oX,ny=r*res*sY+oY;
+    let h=fbm(noise,nx,ny,p.smooth,.45+p.rug*.35);
+    const cx=(c/cols-.5)*2,cy=(r/rows-.5)*2;
+    const dist=Math.sqrt(cx*cx+cy*cy);
+    const shape=Math.abs(p.lat)%3<1.5?1-dist*.35:.6+dist*.1;
+    h=h*(1-p.variance*.3)+h*shape*p.variance*.3+h*(1-p.variance)*.3;
+    hmap[r*cols+c]=Math.max(0,Math.min(1,h));
+  }
+  return{hmap,cols,rows,res};
+}
+
+// ── REAL DEM HEIGHTMAP (OpenTopography via proxy) ─────────────────────────
+async function buildDEMHmap(p, W, H){
+  const half=p.spanDeg/2;
+  const south=(p.lat-half).toFixed(6);
+  const north=(p.lat+half).toFixed(6);
+  const west=(p.lon-half).toFixed(6);
+  const east=(p.lon+half).toFixed(6);
+
+  const params=new URLSearchParams({
+    demtype:p.demType,
+    south,north,west,east,
+    outputFormat:'GTiff',
+    API_Key:p.apiKey
+  });
+
+  // Use proxy if provided, else try direct (will fail due to CORS but give a clear error)
+  const proxyBase=p.proxyUrl||'https://portal.opentopography.org';
+  const url=`${proxyBase}/API/globaldem?${params}`;
+
+  setVeilText('Fetching elevation data…');
+  const resp=await fetch(url);
+  if(!resp.ok){
+    const txt=await resp.text().catch(()=>'');
+    throw new Error(`OpenTopography API error ${resp.status}: ${txt.slice(0,200)}`);
+  }
+
+  setVeilText('Decoding GeoTIFF…');
+  const buf=await resp.arrayBuffer();
+
+  // Decode with geotiff.js
+  const tiff=await GeoTIFF.fromArrayBuffer(buf);
+  const image=await tiff.getImage();
+  const rasters=await image.readRasters();
+  const raw=rasters[0]; // Float32 or Int16 elevation values
+  const tW=image.getWidth();
+  const tH=image.getHeight();
+
+  // Normalize to 0-1 (exclude nodata values, typically -9999 or -32768)
+  let mn=Infinity,mx=-Infinity;
+  for(let i=0;i<raw.length;i++){
+    const v=raw[i];
+    if(v>-9000&&v<Infinity){mn=Math.min(mn,v);mx=Math.max(mx,v);}
+  }
+  const range=mx-mn||1;
+
+  // Resample to canvas grid
+  const res=3;
+  const cols=Math.ceil(W/res)+1;
+  const rows=Math.ceil(H/res)+1;
+  const hmap=new Float32Array(cols*rows);
+
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const srcX=Math.round((c/cols)*tW);
+    const srcY=Math.round((r/rows)*tH);
+    const idx=Math.min(srcY,tH-1)*tW+Math.min(srcX,tW-1);
+    const v=raw[idx];
+    hmap[r*cols+c]=(v>-9000)?Math.max(0,Math.min(1,(v-mn)/range)):0;
+  }
+  return{hmap,cols,rows,res};
+}
+
+// ── RENDER contours onto canvas ───────────────────────────────────────────
+function renderContours(ctx, hmap, cols, rows, res, p, W, H){
+  const lt=isLight(p.pal.bg);
+  const ixC=lt?'rgba(36,60,49,0.72)':'rgba(242,237,227,0.55)';
+  ctx.lineCap='round';ctx.lineJoin='round';
+
+  for(let lvl=0;lvl<p.lines;lvl++){
+    const thr=(lvl+.5)/p.lines;
+    const isIx=p.ix&&(lvl%5===4);
+    ctx.beginPath();
+    ctx.strokeStyle=isIx?ixC:p.pal.line;
+    ctx.lineWidth=isIx?p.weight*2.3:p.weight;
+
+    for(let r=0;r<rows-1;r++)for(let c=0;c<cols-1;c++){
+      const tl=hmap[r*cols+c],tr=hmap[r*cols+c+1];
+      const bl=hmap[(r+1)*cols+c],br=hmap[(r+1)*cols+c+1];
+      const sq=(tl>thr?8:0)|(tr>thr?4:0)|(br>thr?2:0)|(bl>thr?1:0);
+      function ip(a,b){if(Math.abs(b-a)<1e-6)return.5;return(thr-a)/(b-a);}
+      const x=c*res,y=r*res;
+      const tp=[x+ip(tl,tr)*res,y],bt=[x+ip(bl,br)*res,y+res];
+      const lf=[x,y+ip(tl,bl)*res],rt=[x+res,y+ip(tr,br)*res];
+      const sg=[];
+      switch(sq){
+        case 1:case 14:sg.push([lf,bt]);break;case 2:case 13:sg.push([bt,rt]);break;
+        case 3:case 12:sg.push([lf,rt]);break;case 4:case 11:sg.push([tp,rt]);break;
+        case 5:sg.push([lf,tp],[bt,rt]);break;case 6:case 9:sg.push([tp,bt]);break;
+        case 7:case 8:sg.push([lf,tp]);break;case 10:sg.push([lf,bt],[tp,rt]);break;
+      }
+      for(const[a,b]of sg){ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);}
+    }
+    ctx.stroke();
+  }
+}
+
+function renderOverlays(ctx, p, W, H){
+  const lt=isLight(p.pal.bg);
+  if(p.vi&&p.pal.bg!=='transparent'){
+    const vg=ctx.createRadialGradient(W/2,H/2,H*.2,W/2,H/2,H*.75);
+    vg.addColorStop(0,'rgba(0,0,0,0)');
+    vg.addColorStop(1,lt?'rgba(0,0,0,0.12)':'rgba(0,0,0,0.5)');
+    ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+  }
+  if(p.la&&p.name){
+    const fs=Math.round(H*.018);
+    ctx.font=`600 ${fs}px 'Barlow Condensed',sans-serif`;
+    ctx.fillStyle=lt?'rgba(24,24,15,0.38)':'rgba(242,237,227,0.38)';
+    ctx.textAlign='left';
+    ctx.fillText(p.name.toUpperCase(),Math.round(W*.025),H-Math.round(H*.025));
+  }
+  if(p.co){
+    const la=p.lat>=0?p.lat.toFixed(4)+'°N':Math.abs(p.lat).toFixed(4)+'°S';
+    const lo=p.lon>=0?p.lon.toFixed(4)+'°E':Math.abs(p.lon).toFixed(4)+'°W';
+    ctx.font=`300 ${Math.round(H*.012)}px 'Barlow',sans-serif`;
+    ctx.fillStyle=lt?'rgba(24,24,15,0.22)':'rgba(242,237,227,0.2)';
+    ctx.textAlign='right';
+    ctx.fillText(`${la}  ${lo}`,W-Math.round(W*.022),H-Math.round(H*.022));
+  }
+}
+
+function setVeilText(t){document.getElementById('vtxt').textContent=t;}
+
+// ── MAIN GENERATE ─────────────────────────────────────────────────────────
+async function generate(){
+  const p=P();
+  const[W,H]=p.size.split('x').map(Number);
+  const cv=document.getElementById('tc');
+  const mount=document.getElementById('cmount');
+  const stage=document.getElementById('stage');
+  const vl=document.getElementById('veil');
+  const sp=document.getElementById('vspin');
+  const badge=document.getElementById('srcBadge');
+
+  document.querySelectorAll('.gen-btn').forEach(b=>b.classList.add('busy'));
+  vl.classList.remove('gone');sp.style.display='block';
+  badge.classList.remove('show');
+  setVeilText('Preparing…');
+
+  // Size canvas
+  const pad=24;
+  const stW=stage.clientWidth-pad*2,stH=stage.clientHeight-pad*2;
+  const sc=Math.min(stW/W,stH/H,1);
+  const dW=Math.round(W*sc),dH=Math.round(H*sc);
+  cv.width=W;cv.height=H;
+  cv.style.width=dW+'px';cv.style.height=dH+'px';
+  mount.style.width=dW+'px';mount.style.height=dH+'px';
+
+  const ctx=cv.getContext('2d');
+  const transp=p.pal.bg==='transparent';
+  ctx.clearRect(0,0,W,H);
+  if(!transp){ctx.fillStyle=p.pal.bg;ctx.fillRect(0,0,W,H);}
+
+  let hmapData,usingRealDEM=false;
+
+  try{
+    if(currentMode==='dem'&&p.apiKey){
+      setVeilText('Fetching real elevation…');
+      hmapData=await buildDEMHmap(p,W,H);
+      usingRealDEM=true;
+    } else {
+      setVeilText('Rendering…');
+      await new Promise(r=>setTimeout(r,20));
+      hmapData=buildDemoHmap(p,W,H);
+    }
+
+    const{hmap,cols,rows,res}=hmapData;
+    lastHmap={hmap,cols,rows,res,p:{...p},W,H};
+
+    setVeilText('Drawing contours…');
+    await new Promise(r=>setTimeout(r,10));
+
+    renderContours(ctx,hmap,cols,rows,res,p,W,H);
+    renderOverlays(ctx,p,W,H);
+
+    // Source badge
+    badge.textContent=usingRealDEM?'Real DEM — SRTM':'Demo — Procedural';
+    badge.className='src-badge show '+(usingRealDEM?'real':'demo');
+
+    vl.classList.add('gone');sp.style.display='none';
+    document.querySelectorAll('.gen-btn').forEach(b=>b.classList.remove('busy'));
+    done=true;updCoords();
+
+  } catch(err){
+    setVeilText('Error: '+err.message);
+    sp.style.display='none';
+    document.querySelectorAll('.gen-btn').forEach(b=>b.classList.remove('busy'));
+    console.error(err);
+  }
+}
+
+// ── EXPORT ────────────────────────────────────────────────────────────────
+function doExport(fmt){
+  if(!done){alert('Generate a map first.');return;}
+  const cv=document.getElementById('tc');
+  const p=P();
+  if(fmt==='svg'){mkSVG();return;}
+  if(fmt==='png-transparent'){dl(cv.toDataURL('image/png'),'terrain-transparent.png');return;}
+  const tmp=document.createElement('canvas');
+  tmp.width=cv.width;tmp.height=cv.height;
+  const t=tmp.getContext('2d');
+  t.fillStyle=p.pal.bg==='transparent'?'#F2EDE3':p.pal.bg;
+  t.fillRect(0,0,tmp.width,tmp.height);t.drawImage(cv,0,0);
+  dl(fmt==='jpg'?tmp.toDataURL('image/jpeg',.95):tmp.toDataURL('image/png'),
+     fmt==='jpg'?'terrain.jpg':'terrain.png');
+}
+
+function mkSVG(){
+  if(!lastHmap){alert('Generate first.');return;}
+  const{hmap,cols,rows,res,p,W,H}=lastHmap;
+  const lt=isLight(p.pal.bg);
+  const ixC=lt?'rgba(36,60,49,0.72)':'rgba(242,237,227,0.55)';
+  let paths='';
+
+  for(let lvl=0;lvl<p.lines;lvl++){
+    const thr=(lvl+.5)/p.lines,isIx=p.ix&&(lvl%5===4);
+    const stroke=isIx?ixC:p.pal.line;
+    const sw=(isIx?p.weight*2.3:p.weight).toFixed(2);
+    let d='';
+    for(let r=0;r<rows-1;r++)for(let c=0;c<cols-1;c++){
+      const tl=hmap[r*cols+c],tr=hmap[r*cols+c+1];
+      const bl=hmap[(r+1)*cols+c],br=hmap[(r+1)*cols+c+1];
+      const sq=(tl>thr?8:0)|(tr>thr?4:0)|(br>thr?2:0)|(bl>thr?1:0);
+      function ip(a,b){if(Math.abs(b-a)<1e-6)return.5;return(thr-a)/(b-a);}
+      const x=c*res,y=r*res;
+      const tp=[x+ip(tl,tr)*res,y],bt=[x+ip(bl,br)*res,y+res];
+      const lf=[x,y+ip(tl,bl)*res],rt=[x+res,y+ip(tr,br)*res];
+      function sg(a,b){d+=`M${a[0].toFixed(1)},${a[1].toFixed(1)}L${b[0].toFixed(1)},${b[1].toFixed(1)}`;}
+      switch(sq){
+        case 1:case 14:sg(lf,bt);break;case 2:case 13:sg(bt,rt);break;
+        case 3:case 12:sg(lf,rt);break;case 4:case 11:sg(tp,rt);break;
+        case 5:sg(lf,tp);sg(bt,rt);break;case 6:case 9:sg(tp,bt);break;
+        case 7:case 8:sg(lf,tp);break;case 10:sg(lf,bt);sg(tp,rt);break;
+      }
+    }
+    if(d)paths+=`\n  <path d="${d}" stroke="${stroke}" stroke-width="${sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+
+  const bgEl=p.pal.bg==='transparent'?'':`<rect width="${W}" height="${H}" fill="${p.pal.bg}"/>`;
+  const la=p.lat>=0?p.lat.toFixed(4)+'°N':Math.abs(p.lat).toFixed(4)+'°S';
+  const lo=p.lon>=0?p.lon.toFixed(4)+'°E':Math.abs(p.lon).toFixed(4)+'°W';
+  const cEl=p.co?`<text x="${W-W*.022}" y="${H-H*.022}" text-anchor="end" font-family="Barlow,sans-serif" font-size="${Math.round(H*.012)}" fill="${lt?'rgba(24,24,15,0.22)':'rgba(242,237,227,0.2)'}">${la}  ${lo}</text>`:'';
+  const lEl=(p.la&&p.name)?`<text x="${W*.025}" y="${H-H*.025}" font-family="'Barlow Condensed',sans-serif" font-weight="600" font-size="${Math.round(H*.018)}" fill="${lt?'rgba(24,24,15,0.38)':'rgba(242,237,227,0.38)'}">${p.name.toUpperCase()}</text>`:'';
+  const svg=`<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">\n  ${bgEl}${paths}\n  ${cEl}\n  ${lEl}\n</svg>`;
+  dl(URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'})),'terrain.svg');
+}
+
+function dl(url,name){const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);}
+
+// ── UI BINDINGS ───────────────────────────────────────────────────────────
+
+// mode toggle
+function setMode(m){
+  currentMode=m;
+  document.getElementById('modeDemo').classList.toggle('active',m==='demo');
+  document.getElementById('modeDEM').classList.toggle('active',m==='dem');
+  document.getElementById('demSection').style.display=m==='dem'?'block':'none';
+  document.getElementById('demoControls').style.display=m==='demo'?'block':'none';
+}
+document.getElementById('modeDemo').addEventListener('click',()=>setMode('demo'));
+document.getElementById('modeDEM').addEventListener('click',()=>setMode('dem'));
+
+// tabs
+document.querySelectorAll('.dtab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.dtab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-'+tab.dataset.tab).classList.add('active');
+  });
+});
+
+// ranges
+document.getElementById('r-l').addEventListener('input',e=>document.getElementById('rv-l').textContent=e.target.value);
+document.getElementById('r-w').addEventListener('input',e=>document.getElementById('rv-w').textContent=(e.target.value/10).toFixed(1));
+document.getElementById('r-s').addEventListener('input',e=>document.getElementById('rv-s').textContent=e.target.value);
+document.getElementById('r-r').addEventListener('input',e=>document.getElementById('rv-r').textContent=(e.target.value/100).toFixed(2));
+document.getElementById('r-v').addEventListener('input',e=>document.getElementById('rv-v').textContent=(e.target.value/100).toFixed(2));
+document.getElementById('r-sd').addEventListener('input',e=>document.getElementById('rv-sd').textContent=e.target.value);
+
+// palette
+document.querySelectorAll('.pal:not(#palC)').forEach(sw=>{
+  sw.addEventListener('click',()=>{
+    document.querySelectorAll('.pal').forEach(s=>s.classList.remove('on'));
+    sw.classList.add('on');
+    pal={bg:sw.dataset.bg,line:sw.dataset.line,name:sw.dataset.name};
+  });
+});
+document.getElementById('palC').addEventListener('click',()=>document.getElementById('cCol').click());
+document.getElementById('cCol').addEventListener('input',e=>{
+  const hex=e.target.value;
+  pal={bg:hex,line:isLight(hex)?'rgba(36,60,49,0.48)':'rgba(242,237,227,0.22)',name:'Custom'};
+  document.getElementById('palC').style.background=hex;
+  document.querySelectorAll('.pal').forEach(s=>s.classList.remove('on'));
+  document.getElementById('palC').classList.add('on');
+});
+
+// chips
+document.querySelectorAll('.chip').forEach(c=>{
+  c.addEventListener('click',()=>{
+    document.getElementById('latI').value=c.dataset.lat;
+    document.getElementById('lonI').value=c.dataset.lon;
+    document.getElementById('locS').value=c.dataset.n;
+    updCoords();generate();
+  });
+});
+
+// generate
+document.getElementById('genBtn').addEventListener('click',generate);
+document.getElementById('genBtn2').addEventListener('click',generate);
+document.getElementById('locS').addEventListener('keydown',e=>{if(e.key==='Enter')generate();});
+
+// randomize
+document.getElementById('randBtn').addEventListener('click',()=>{
+  const v=Math.floor(Math.random()*999)+1;
+  document.getElementById('r-sd').value=v;
+  document.getElementById('rv-sd').textContent=v;
+  generate();
+});
+
+// download menu
+document.getElementById('dlBtn').addEventListener('click',e=>{
+  e.stopPropagation();
+  document.getElementById('dlMenu').classList.toggle('open');
+});
+document.addEventListener('click',()=>document.getElementById('dlMenu').classList.remove('open'));
+document.querySelectorAll('.dl-item').forEach(it=>{
+  it.addEventListener('click',()=>{doExport(it.dataset.fmt);document.getElementById('dlMenu').classList.remove('open');});
+});
+document.querySelectorAll('.exp-big').forEach(btn=>{
+  btn.addEventListener('click',()=>doExport(btn.dataset.fmt));
+});
+
+// init
+window.addEventListener('load',()=>setTimeout(generate,100));
+</script>
+</body>
+</html>
