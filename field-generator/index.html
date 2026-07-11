@@ -11,174 +11,203 @@ function mulberry32(seed) {
   };
 }
 
-const PAPERS = ["#faf6ec", "#f7f2e6", "#f6f1e8", "#f4efdf"];
-
-const PALETTES = [
-  { name: "indigo", inks: ["#2b3a55", "#41547a", "#8195b5", "#c46a4a"] },
-  { name: "moss",   inks: ["#3d4a2f", "#5c6e42", "#8a9a5b", "#a8763e"] },
-  { name: "rust",   inks: ["#7a3b2e", "#a05c3b", "#c98a5e", "#4a453c"] },
-  { name: "sumi",   inks: ["#33302b", "#5a554c", "#8c8577", "#9c4f3c"] },
-  { name: "heather",inks: ["#4a3b52", "#6f5b7d", "#9c8daa", "#b0803f"] },
-  { name: "sea",    inks: ["#2e4d4f", "#4a7375", "#7fa8a5", "#b0703c"] },
-];
+function hashText(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
 
 function hexA(hex, a) {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
-// ---------- generators ----------
+// ---------- palettes ----------
+const PAPERS = ["#faf6ec", "#f7f2e6", "#f6f1e8", "#f4efdf"];
+const DARK_PAPER = "#2b2823";
+const DARK_INKS = ["#e9e1cc", "#cdc3a8", "#a99d82", "#c98a5e"];
 
-function grain(ctx, W, H, r) {
+const PALETTES = {
+  indigo:  ["#2b3a55", "#41547a", "#8195b5", "#c46a4a"],
+  moss:    ["#3d4a2f", "#5c6e42", "#8a9a5b", "#a8763e"],
+  rust:    ["#7a3b2e", "#a05c3b", "#c98a5e", "#4a453c"],
+  sumi:    ["#33302b", "#5a554c", "#8c8577", "#9c4f3c"],
+  heather: ["#4a3b52", "#6f5b7d", "#9c8daa", "#b0803f"],
+  sea:     ["#2e4d4f", "#4a7375", "#7fa8a5", "#b0703c"],
+};
+
+const COLOR_WORDS = {
+  indigo: "indigo", blue: "indigo", navy: "indigo",
+  moss: "moss", green: "moss", forest: "moss", olive: "moss",
+  rust: "rust", red: "rust", orange: "rust", clay: "rust", autumn: "rust",
+  sumi: "sumi", black: "sumi", ink: "sumi", charcoal: "sumi", grey: "sumi", gray: "sumi",
+  heather: "heather", purple: "heather", violet: "heather", plum: "heather",
+  sea: "sea", teal: "sea", ocean: "sea",
+};
+
+const SUBJECT_WORDS = {
+  fern: "fern", frond: "fern",
+  tree: "tree", bough: "tree", branch: "tree", pine: "tree", oak: "tree", blossom: "tree",
+  grass: "grass", meadow: "grass", reed: "grass", reeds: "grass", field: "grass", wheat: "grass",
+  mountain: "ridges", mountains: "ridges", ridge: "ridges", ridges: "ridges", hill: "ridges", hills: "ridges",
+  wave: "water", waves: "water", water: "water", tide: "water", river: "water", lake: "water",
+  seed: "seed", seeds: "seed", bloom: "seed", sunflower: "seed", flower: "seed", dandelion: "seed",
+};
+
+// ---------- stipple helpers (everything is dots, like a fern print) ----------
+function dot(ctx, x, y, color, a, s) {
+  ctx.fillStyle = hexA(color, a);
+  ctx.fillRect(x, y, s, s);
+}
+
+// stippled quadratic stroke
+function stippleCurve(ctx, r, x1, y1, cx, cy, x2, y2, width, color, density) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const steps = Math.max(4, Math.floor(len * 0.55 * density));
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const it = 1 - t;
+    const px = it * it * x1 + 2 * it * t * cx + t * t * x2;
+    const py = it * it * y1 + 2 * it * t * cy + t * t * y2;
+    const n = 1 + Math.floor(r() * 2);
+    for (let k = 0; k < n; k++) {
+      dot(ctx, px + (r() - 0.5) * width * 2.2, py + (r() - 0.5) * width * 2.2,
+        color, 0.25 + r() * 0.35, 1.5 + r() * 0.7);
+    }
+  }
+}
+
+// stippled filled blob (cluster of points inside an ellipse)
+function stippleBlob(ctx, r, x, y, rx, ry, rot, color, count) {
+  const cos = Math.cos(rot), sin = Math.sin(rot);
+  for (let i = 0; i < count; i++) {
+    const ang = r() * Math.PI * 2;
+    const rad = Math.sqrt(r());
+    const ex = Math.cos(ang) * rx * rad;
+    const ey = Math.sin(ang) * ry * rad;
+    dot(ctx, x + ex * cos - ey * sin, y + ex * sin + ey * cos,
+      color, 0.25 + r() * 0.4, 1.5 + r() * 0.7);
+  }
+}
+
+function grain(ctx, W, H, r, dark) {
+  const c = dark ? "rgba(240,230,205,0.02)" : "rgba(90,80,60,0.025)";
   for (let i = 0; i < 5000; i++) {
-    ctx.fillStyle = `rgba(90,80,60,${0.015 + r() * 0.03})`;
+    ctx.fillStyle = c;
     ctx.fillRect(r() * W, r() * H, 1.4, 1.4);
   }
 }
 
-// 1. branching tree with leaves
-function genTree(ctx, W, H, r, pal) {
-  const ink = pal.inks[0];
-  const leafColors = [pal.inks[2], pal.inks[3]];
+// ---------- generators (all in stipple print style) ----------
+
+function genTree(ctx, W, H, r, inks, mods) {
+  const ink = inks[0];
+  const leafColors = [inks[2], inks[3]];
+  const lean = mods.wind * 0.35;
   function branch(x, y, ang, len, w, depth) {
     if (depth <= 0 || len < 9) {
-      if (r() < 0.8) {
-        const c = leafColors[r() < 0.75 ? 0 : 1];
-        const s = 5 + r() * 11;
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(r() * Math.PI * 2);
-        ctx.fillStyle = hexA(c, 0.5 + r() * 0.35);
-        ctx.beginPath();
-        ctx.ellipse(0, 0, s, s * 0.45, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+      if (r() < 0.8 * mods.density) {
+        stippleBlob(ctx, r, x, y, 6 + r() * 12, (6 + r() * 12) * 0.45,
+          r() * Math.PI * 2, leafColors[r() < 0.75 ? 0 : 1], 26 + Math.floor(r() * 30));
       }
       return;
     }
-    const bend = (r() - 0.5) * len * 0.5;
-    const mx = x + Math.cos(ang) * len * 0.5 + Math.cos(ang + Math.PI / 2) * bend;
-    const my = y + Math.sin(ang) * len * 0.5 + Math.sin(ang + Math.PI / 2) * bend;
+    const bend = (r() - 0.5 + lean) * len * 0.5;
     const nx = x + Math.cos(ang) * len;
     const ny = y + Math.sin(ang) * len;
-    ctx.strokeStyle = hexA(ink, 0.9);
-    ctx.lineWidth = w;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.quadraticCurveTo(mx, my, nx, ny);
-    ctx.stroke();
+    const mx = (x + nx) / 2 + Math.cos(ang + Math.PI / 2) * bend;
+    const my = (y + ny) / 2 + Math.sin(ang + Math.PI / 2) * bend;
+    stippleCurve(ctx, r, x, y, mx, my, nx, ny, Math.max(w, 1), ink, mods.density);
     const kids = r() < 0.28 ? 3 : 2;
     for (let i = 0; i < kids; i++) {
-      branch(nx, ny, ang + (r() - 0.5) * 1.15, len * (0.66 + r() * 0.16), Math.max(w * 0.62, 0.7), depth - 1);
+      branch(nx, ny, ang + (r() - 0.5) * 1.15 + lean * 0.3,
+        len * (0.66 + r() * 0.16), Math.max(w * 0.62, 0.7), depth - 1);
     }
   }
   const baseX = W * (0.42 + r() * 0.16);
-  branch(baseX, H * 0.9, -Math.PI / 2 + (r() - 0.5) * 0.25, H * 0.17, W * 0.011, 8);
-  // ground stroke
-  ctx.strokeStyle = hexA(ink, 0.55);
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(W * 0.16, H * 0.905);
-  ctx.quadraticCurveTo(W * 0.5, H * (0.9 + (r() - 0.5) * 0.01), W * 0.84, H * 0.905);
-  ctx.stroke();
+  branch(baseX, H * 0.9, -Math.PI / 2 + (r() - 0.5) * 0.2 + lean, H * 0.17 * mods.tall, W * 0.009, 8);
+  stippleCurve(ctx, r, W * 0.16, H * 0.905, W * 0.5, H * 0.9, W * 0.84, H * 0.905, 2, ink, mods.density);
   return "bough";
 }
 
-// 2. wind-bent grass field
-function genGrass(ctx, W, H, r, pal) {
-  const wind = (r() - 0.5) * 1.6;
-  const count = 220 + Math.floor(r() * 140);
+function genGrass(ctx, W, H, r, inks, mods) {
+  const wind = mods.wind !== 0 ? mods.wind : (r() - 0.5) * 1.6;
+  const count = Math.floor((220 + r() * 140) * mods.density);
   for (let i = 0; i < count; i++) {
     const x = W * 0.08 + r() * W * 0.84;
     const base = H * (0.78 + r() * 0.12);
-    const h = H * (0.12 + r() * 0.36) * (1 - Math.abs(x / W - 0.5) * 0.6);
+    const h = H * (0.12 + r() * 0.36) * mods.tall * (1 - Math.abs(x / W - 0.5) * 0.6);
     const sway = wind * h * (0.25 + r() * 0.45);
-    const ink = pal.inks[Math.floor(r() * 3)];
-    ctx.strokeStyle = hexA(ink, 0.35 + r() * 0.5);
-    ctx.lineWidth = 1 + r() * 2.4;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(x, base);
-    ctx.quadraticCurveTo(x + sway * 0.25, base - h * 0.6, x + sway, base - h);
-    ctx.stroke();
+    const ink = inks[Math.floor(r() * 3)];
+    stippleCurve(ctx, r, x, base, x + sway * 0.25, base - h * 0.6, x + sway, base - h, 1.2, ink, mods.density * 0.7);
     if (r() < 0.14) {
-      ctx.fillStyle = hexA(pal.inks[3], 0.75);
-      ctx.beginPath();
-      ctx.ellipse(x + sway, base - h, 4 + r() * 5, 8 + r() * 9, wind * 0.4, 0, Math.PI * 2);
-      ctx.fill();
+      stippleBlob(ctx, r, x + sway, base - h, 5 + r() * 5, 9 + r() * 9, wind * 0.4, inks[3], 30);
     }
   }
   return "meadow";
 }
 
-// 3. phyllotaxis seed head
-function genSeedHead(ctx, W, H, r, pal) {
+function genSeedHead(ctx, W, H, r, inks, mods) {
   const cx = W / 2, cy = H * 0.46;
-  const n = 650 + Math.floor(r() * 500);
+  const n = Math.floor((650 + r() * 500) * mods.density);
   const golden = Math.PI * (3 - Math.sqrt(5));
   const spread = (Math.min(W, H) * 0.4) / Math.sqrt(n);
-  const a = pal.inks[0], b = pal.inks[Math.floor(1 + r() * 3)];
+  const a = inks[0], b = inks[1 + Math.floor(r() * 3)];
   for (let i = 0; i < n; i++) {
     const ang = i * golden + (r() - 0.5) * 0.04;
     const rad = spread * Math.sqrt(i) * (1 + (r() - 0.5) * 0.05);
     const x = cx + Math.cos(ang) * rad;
     const y = cy + Math.sin(ang) * rad;
     const t = i / n;
-    const c = r() < t ? b : a;
-    const s = 2 + t * 9 * (0.7 + r() * 0.6);
-    ctx.fillStyle = hexA(c, 0.4 + (1 - t) * 0.5);
-    ctx.beginPath();
-    ctx.arc(x, y, s, 0, Math.PI * 2);
-    ctx.fill();
+    stippleBlob(ctx, r, x, y, 2 + t * 8, 2 + t * 8, 0, r() < t ? b : a, 4 + Math.floor(t * 14));
   }
-  // stem
-  ctx.strokeStyle = hexA(pal.inks[0], 0.8);
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy + Math.min(W, H) * 0.41);
-  ctx.quadraticCurveTo(cx + (r() - 0.5) * 120, H * 0.75, cx + (r() - 0.5) * 60, H * 0.94);
-  ctx.stroke();
+  stippleCurve(ctx, r, cx, cy + Math.min(W, H) * 0.41, cx + (r() - 0.5) * 120, H * 0.75,
+    cx + (r() - 0.5) * 60, H * 0.94, 2.5, inks[0], mods.density);
   return "seed head";
 }
 
-// 4. layered ridgelines with a low sun
-function genRidges(ctx, W, H, r, pal) {
+function genRidges(ctx, W, H, r, inks, mods) {
   const layers = 6 + Math.floor(r() * 3);
-  // sun or moon
   const sx = W * (0.2 + r() * 0.6), sy = H * (0.14 + r() * 0.14);
-  ctx.fillStyle = hexA(pal.inks[3], 0.85);
-  ctx.beginPath();
-  ctx.arc(sx, sy, W * (0.045 + r() * 0.035), 0, Math.PI * 2);
-  ctx.fill();
+  stippleBlob(ctx, r, sx, sy, W * 0.05, W * 0.05, 0, inks[3], 900);
   for (let L = 0; L < layers; L++) {
     const t = L / (layers - 1);
     const baseY = H * (0.3 + t * 0.55);
     const amp = H * (0.02 + (1 - t) * 0.09);
     const f1 = 1.5 + r() * 2.5, f2 = 4 + r() * 5, p1 = r() * 9, p2 = r() * 9;
-    ctx.fillStyle = hexA(pal.inks[Math.min(2, Math.floor(t * 3))], 0.22 + t * 0.65);
-    ctx.beginPath();
-    ctx.moveTo(0, H);
-    for (let x = 0; x <= W; x += 6) {
-      const u = x / W;
-      const y = baseY + Math.sin(u * f1 * Math.PI + p1) * amp + Math.sin(u * f2 * Math.PI + p2) * amp * 0.35;
-      ctx.lineTo(x, y);
+    const ink = inks[Math.min(2, Math.floor(t * 3))];
+    const ridgeY = (u) =>
+      baseY + Math.sin(u * f1 * Math.PI + p1) * amp + Math.sin(u * f2 * Math.PI + p2) * amp * 0.35;
+    // stipple fill: dense at the ridge line, fading downward
+    const cols = Math.floor(W / 3);
+    for (let cI = 0; cI <= cols; cI++) {
+      const x = (cI / cols) * W;
+      const yTop = ridgeY(x / W);
+      const depth = H * 0.11;
+      const nPts = Math.floor((5 + t * 6) * mods.density);
+      for (let k = 0; k < nPts; k++) {
+        const fall = Math.pow(r(), 2.2);
+        dot(ctx, x + (r() - 0.5) * 4, yTop + fall * depth,
+          ink, (0.2 + t * 0.4) * (1 - fall * 0.8) + 0.08, 1.5 + r() * 0.7);
+      }
+      // crisp ridge edge
+      dot(ctx, x, yTop + (r() - 0.5) * 2, ink, 0.5 + t * 0.3, 1.8);
     }
-    ctx.lineTo(W, H);
-    ctx.closePath();
-    ctx.fill();
   }
   return "ridgeline";
 }
 
-// 5. Barnsley-style fern, randomly tinted and leaned
-function genFern(ctx, W, H, r, pal) {
+function genFern(ctx, W, H, r, inks, mods) {
   let x = 0, y = 0;
-  const lean = (r() - 0.5) * 0.3;
-  const scale = H * 0.085 * (0.9 + r() * 0.25);
+  const lean = (r() - 0.5) * 0.3 + mods.wind * 0.15;
+  const scale = H * 0.085 * (0.9 + r() * 0.25) * mods.tall;
   const cx = W * (0.4 + r() * 0.2), baseY = H * 0.94;
-  const a = pal.inks[0], b = pal.inks[1];
-  const pts = 42000;
+  const a = inks[0], b = inks[1];
+  const pts = Math.floor(42000 * mods.density);
   for (let i = 0; i < pts; i++) {
     const p = r();
     let nx, ny;
@@ -190,45 +219,57 @@ function genFern(ctx, W, H, r, pal) {
     if (i < 20) continue;
     const px = cx + (x + y * lean) * scale;
     const py = baseY - y * scale;
-    ctx.fillStyle = hexA(r() < 0.85 ? a : b, 0.28 + r() * 0.3);
-    ctx.fillRect(px, py, 1.7, 1.7);
+    dot(ctx, px, py, r() < 0.85 ? a : b, 0.28 + r() * 0.3, 1.7);
   }
   return "fern";
 }
 
-// 6. flowing water lines with a moon
-function genWater(ctx, W, H, r, pal) {
-  const lines = 55 + Math.floor(r() * 30);
+function genWater(ctx, W, H, r, inks, mods) {
+  const lines = Math.floor((55 + r() * 30) * mods.density);
   const mx = W * (0.25 + r() * 0.5), my = H * (0.16 + r() * 0.1);
-  ctx.fillStyle = hexA(pal.inks[3], 0.8);
-  ctx.beginPath();
-  ctx.arc(mx, my, W * 0.05, 0, Math.PI * 2);
-  ctx.fill();
+  stippleBlob(ctx, r, mx, my, W * 0.05, W * 0.05, 0, inks[3], 900);
+  const windAmp = 1 + Math.abs(mods.wind) * 0.8;
   for (let i = 0; i < lines; i++) {
     const t = i / lines;
     const y0 = H * (0.34 + t * 0.58);
-    const amp = 6 + t * 26;
+    const amp = (6 + t * 26) * windAmp;
     const f1 = 2 + r() * 3, f2 = 6 + r() * 6, p1 = r() * 9, p2 = r() * 9;
-    ctx.strokeStyle = hexA(pal.inks[Math.floor(r() * 2)], 0.25 + t * 0.5);
-    ctx.lineWidth = 1 + t * 1.8;
-    ctx.beginPath();
-    for (let x = 0; x <= W; x += 7) {
-      const u = x / W;
+    const ink = inks[Math.floor(r() * 2)];
+    for (let px = 0; px <= W; px += 4) {
+      const u = px / W;
       const y = y0 + Math.sin(u * f1 * Math.PI + p1 + t * 4) * amp + Math.sin(u * f2 * Math.PI + p2) * amp * 0.3;
-      if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      if (r() < 0.75) dot(ctx, px + (r() - 0.5) * 3, y + (r() - 0.5) * 3, ink, 0.2 + t * 0.4, 1.5 + r() * 0.7);
     }
-    ctx.stroke();
   }
   return "tide";
 }
 
-const GENERATORS = [genTree, genGrass, genSeedHead, genRidges, genFern, genWater];
+const GENERATORS = { tree: genTree, grass: genGrass, seed: genSeedHead, ridges: genRidges, fern: genFern, water: genWater };
 const MOODS = ["quiet", "still", "early", "late", "pale", "low", "soft", "first", "slow"];
+
+// ---------- prompt parsing ----------
+function parsePrompt(text) {
+  const words = text.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  const out = { subject: null, palette: null, dark: false, density: 1, wind: 0, tall: 1 };
+  for (const w of words) {
+    if (SUBJECT_WORDS[w]) out.subject = SUBJECT_WORDS[w];
+    if (COLOR_WORDS[w]) out.palette = COLOR_WORDS[w];
+    if (w === "night" || w === "dark" || w === "midnight") out.dark = true;
+    if (w === "dense" || w === "thick" || w === "lush" || w === "wild") out.density = 1.5;
+    if (w === "sparse" || w === "thin" || w === "bare" || w === "winter") out.density = 0.55;
+    if (w === "windy" || w === "wind" || w === "storm" || w === "breeze") out.wind = 1.2;
+    if (w === "leaning" || w === "bent") out.wind = 0.8;
+    if (w === "tall" || w === "high") out.tall = 1.3;
+    if (w === "small" || w === "short") out.tall = 0.75;
+  }
+  return out;
+}
 
 export default function NatureStudies() {
   const canvasRef = useRef(null);
   const [caption, setCaption] = useState("");
-  const [seed, setSeed] = useState(() => Math.floor(Math.random() * 4294967295));
+  const [prompt, setPrompt] = useState("");
+  const [nonce, setNonce] = useState(() => Math.floor(Math.random() * 4294967295));
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -237,22 +278,28 @@ export default function NatureStudies() {
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext("2d");
+
+    const parsed = parsePrompt(prompt);
+    const seed = (hashText(prompt.trim().toLowerCase()) ^ nonce) >>> 0;
     const r = mulberry32(seed);
 
-    const paper = PAPERS[Math.floor(r() * PAPERS.length)];
-    const pal = PALETTES[Math.floor(r() * PALETTES.length)];
+    const dark = parsed.dark;
+    const paper = dark ? DARK_PAPER : PAPERS[Math.floor(r() * PAPERS.length)];
+    const palName = parsed.palette || Object.keys(PALETTES)[Math.floor(r() * 6)];
+    const inks = dark ? DARK_INKS : PALETTES[palName];
     ctx.fillStyle = paper;
     ctx.fillRect(0, 0, W, H);
-    grain(ctx, W, H, r);
+    grain(ctx, W, H, r, dark);
 
-    const gen = GENERATORS[Math.floor(r() * GENERATORS.length)];
-    const subject = gen(ctx, W, H, r, pal);
+    const genKey = parsed.subject || Object.keys(GENERATORS)[Math.floor(r() * 6)];
+    const mods = { density: parsed.density, wind: parsed.wind * (r() < 0.5 ? -1 : 1), tall: parsed.tall };
+    const subject = GENERATORS[genKey](ctx, W, H, r, inks, mods);
 
     const mood = MOODS[Math.floor(r() * MOODS.length)];
-    setCaption(`${mood} ${subject} · no. ${String(seed % 1000).padStart(3, "0")}`);
-  }, [seed]);
+    setCaption(`${mood} ${subject} · ${dark ? "night" : palName} · no. ${String(seed % 1000).padStart(3, "0")}`);
+  }, [nonce, prompt]);
 
-  const regenerate = () => setSeed(Math.floor(Math.random() * 4294967295));
+  const regenerate = () => setNonce(Math.floor(Math.random() * 4294967295));
 
   const save = () => {
     const canvas = canvasRef.current;
@@ -263,12 +310,13 @@ export default function NatureStudies() {
     a.click();
   };
 
+  const serif = "Georgia, 'Times New Roman', serif";
   const btn = {
     background: "none",
     border: "none",
     padding: "6px 4px",
     cursor: "pointer",
-    fontFamily: "Georgia, 'Times New Roman', serif",
+    fontFamily: serif,
     fontSize: 15,
     letterSpacing: "0.12em",
     color: "#5a5344",
@@ -291,8 +339,8 @@ export default function NatureStudies() {
       <canvas
         ref={canvasRef}
         style={{
-          maxHeight: "76vh",
-          maxWidth: "min(92vw, 560px)",
+          maxHeight: "70vh",
+          maxWidth: "min(92vw, 540px)",
           width: "auto",
           height: "auto",
           border: "1px solid rgba(90,80,60,0.25)",
@@ -302,7 +350,7 @@ export default function NatureStudies() {
       <div
         style={{
           marginTop: 14,
-          fontFamily: "Georgia, 'Times New Roman', serif",
+          fontFamily: serif,
           fontStyle: "italic",
           fontSize: 14,
           color: "#7a7261",
@@ -310,7 +358,27 @@ export default function NatureStudies() {
       >
         {caption}
       </div>
-      <div style={{ marginTop: 6, display: "flex", gap: 28 }}>
+      <input
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") regenerate(); }}
+        placeholder="windy indigo grass · dark fern · sparse rust ridges…"
+        style={{
+          marginTop: 16,
+          width: "min(86vw, 420px)",
+          background: "transparent",
+          border: "none",
+          borderBottom: "1px solid rgba(90,80,60,0.4)",
+          outline: "none",
+          padding: "6px 2px",
+          fontFamily: serif,
+          fontStyle: "italic",
+          fontSize: 15,
+          color: "#4a4437",
+          textAlign: "center",
+        }}
+      />
+      <div style={{ marginTop: 10, display: "flex", gap: 28 }}>
         <button
           style={btn}
           onClick={regenerate}
